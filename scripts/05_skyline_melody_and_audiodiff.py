@@ -33,24 +33,26 @@ def extract_skyline_measures(
     mu_diskant: list[dict],
     bass_notes: list[dict],
     raw_downbeats_s: list[float],
-    max_measures: int = 16,
+    max_measures: int = 60,
 ) -> tuple[list[dict], list[float]]:
     """
     1. Regularizes the downbeat sequence using muscriptor's regularized_beats()
-       so spurious extra beats (like 8.74s right after 8.44s) are dropped and missing
-       downbeats (like 9.22s) are cleanly interpolated.
+       across the full 0..30s audio clip.
     2. Uses the Skyline Algorithm (highest pitch = melody voice + harmonizing lower voice)
        combined with MuScriptor's onset articulation.
     """
-    # Keep downbeats starting from the first real accompaniment bar (~1.78s)
-    initial_dbs = np.array([d for d in raw_downbeats_s if d >= 1.70], dtype=float)
+    initial_dbs = np.array(raw_downbeats_s, dtype=float)
     reg_dbs = regularized_beats(initial_dbs).tolist()
-    print(f"      -> Raw Downbeats:         {[round(d, 2) for d in initial_dbs[:12]]}")
-    print(f"      -> Regularized Downbeats: {[round(d, 2) for d in reg_dbs[:12]]}")
+    if reg_dbs and reg_dbs[-1] < 29.5:
+        reg_dbs.append(round(reg_dbs[-1] + 0.82, 3))
+    print(f"      -> Regularized Downbeats ({len(reg_dbs)} bars, {reg_dbs[0]:.2f}s..{reg_dbs[-1]:.2f}s)")
 
     # Combine Diskant notes from Basic Pitch (high sensitivity for upper melody 72..76)
-    # and MuScriptor (clean articulation)
-    all_diskant = bp_diskant + mu_diskant
+    # and MuScriptor (clean articulation), suppressing high 4th-harmonic reed overtones (> MIDI 81)
+    all_diskant = [
+        n for n in (bp_diskant + mu_diskant)
+        if 58 <= n["pitch"] <= 81
+    ]
 
     events = []
     num_bars = min(max_measures, len(reg_dbs) - 1)
@@ -182,17 +184,21 @@ def synthesize_harmonika_chord(pitches: list[int], duration_s: float, sr: int = 
 
 
 def create_audio_verification_files(
-    orig_wav_path: Path, events: list[dict], downbeats_s: list[float], output_dir: Path
+    orig_wav_path: Path,
+    events: list[dict],
+    griff_states: list,
+    downbeats_s: list[float],
+    output_dir: Path,
 ):
     """
-    Creates two verification WAV files:
-      1. outputs/05_synthesized_score_only.wav (only the notes from our generated sheet music)
+    Creates two verification WAV files across the full 30s audio clip:
+      1. outputs/05_synthesized_score_only.wav (only the notes + bass from our generated sheet music)
       2. outputs/05_stereo_overlay_check.wav (Left = Original Video Audio, Right = Generated Sheet Music + Downbeat Clicks)
     """
     orig_y, sr = librosa.load(str(orig_wav_path), sr=22050, mono=True)
     synth_y = np.zeros_like(orig_y)
 
-    # Synthesize each quantized sheet music chord at its exact measure/slot timestamp
+    # Synthesize each quantized sheet music Diskant chord at its exact measure/slot timestamp
     for ev in events:
         i_start = int(ev["start_s"] * sr)
         i_end = min(len(synth_y), int(ev["end_s"] * sr))
@@ -202,17 +208,43 @@ def create_audio_verification_files(
         chord_wave = synthesize_harmonika_chord(ev["pitches"], dur_s, sr=sr)
         synth_y[i_start : i_start + len(chord_wave)] += 0.65 * chord_wave[: i_end - i_start]
 
+    # Synthesize Bass accompaniment (Beat 1 = Helikon Grundbass, Beat 2 = Akkordbass) per measure
+    measures_dir = {}
+    for ev, gs in zip(events, griff_states):
+        measures_dir.setdefault(ev["measure"], gs.direction)
+
+    for m_idx in range(len(downbeats_s) - 1):
+        t0, t1 = downbeats_s[m_idx], downbeats_s[m_idx + 1]
+        t_mid = 0.5 * (t0 + t1)
+        direction = measures_dir.get(m_idx + 1, "DRUCK")
+        bass_pitches = [36, 48] if direction == "DRUCK" else [38, 50]
+        akk_pitches = [52, 55] if direction == "DRUCK" else [50, 55]
+
+        # Beat 1: Grundbass
+        i_b1 = int(t0 * sr)
+        i_b1_end = min(len(synth_y), int((t0 + 0.25 * (t1 - t0)) * sr))
+        if i_b1_end > i_b1:
+            bw = synthesize_harmonika_chord(bass_pitches, (i_b1_end - i_b1) / sr, sr=sr)
+            synth_y[i_b1:i_b1_end] += 0.35 * bw[: i_b1_end - i_b1]
+
+        # Beat 2: Akkord-Nachschlag
+        i_b2 = int(t_mid * sr)
+        i_b2_end = min(len(synth_y), int((t_mid + 0.25 * (t1 - t0)) * sr))
+        if i_b2_end > i_b2:
+            aw = synthesize_harmonika_chord(akk_pitches, (i_b2_end - i_b2) / sr, sr=sr)
+            synth_y[i_b2:i_b2_end] += 0.28 * aw[: i_b2_end - i_b2]
+
     # Add a subtle woodblock/metronome tick on each regularized measure Downbeat ("Schlag 1")
     for db in downbeats_s:
         i_db = int(db * sr)
         tick_len = min(int(0.025 * sr), len(synth_y) - i_db)
         if tick_len > 0:
             t_tick = np.linspace(0, tick_len / sr, tick_len, endpoint=False)
-            tick = 0.25 * np.sin(2 * np.pi * 1200.0 * t_tick) * np.exp(-t_tick * 120.0)
+            tick = 0.22 * np.sin(2 * np.pi * 1200.0 * t_tick) * np.exp(-t_tick * 120.0)
             synth_y[i_db : i_db + tick_len] += tick
 
     # Normalize and save solo synth WAV
-    synth_norm = np.clip(synth_y / (np.max(np.abs(synth_y)) + 1e-6) * 0.85, -1.0, 1.0)
+    synth_norm = np.clip(synth_y / (np.max(np.abs(synth_y)) + 1e-6) * 0.88, -1.0, 1.0)
     solo_path = output_dir / "05_synthesized_score_only.wav"
     wavfile.write(str(solo_path), sr, (synth_norm * 32767).astype(np.int16))
 
@@ -222,8 +254,8 @@ def create_audio_verification_files(
     stereo_path = output_dir / "05_stereo_overlay_check.wav"
     wavfile.write(str(stereo_path), sr, (stereo * 32767).astype(np.int16))
 
-    print(f"      -> Saved Solo Score Audio:   {solo_path}")
-    print(f"      -> Saved Stereo Diff Audio:  {stereo_path} (Left=Original, Right=Generated Score)")
+    print(f"      -> Saved Solo Score Audio:   {solo_path} (Full 30s!)")
+    print(f"      -> Saved Stereo Diff Audio:  {stereo_path} (Full 30s! Left=Original, Right=Generated Score)")
 
 
 def build_clean_polka_musicxml(events: list[dict], griff_states: list, title: str) -> str:
@@ -335,14 +367,15 @@ def main():
     mu_diskant = comp_data.get("mu_diskant_notes", [])
     combined_bass = bp_data["bass_notes"] + comp_data["pti_bass_notes"] + comp_data.get("mu_bass_notes", [])
 
-    print("[1/4] Running Regularized Downbeat Grid + Skyline Melody Extractor (16 Measures)...")
+    print("[1/4] Running Regularized Downbeat Grid + Skyline Melody Extractor (Full 30s = 35 Measures)...")
     events, reg_dbs = extract_skyline_measures(
-        bp_diskant, mu_diskant, combined_bass, raw_downbeats_s, max_measures=16
+        bp_diskant, mu_diskant, combined_bass, raw_downbeats_s, max_measures=60
     )
 
     print("[2/4] Running Viterbi Griffschrift Optimizer...")
     griff_states = vmod.viterbi_optimize_griffschrift(events)
-    for m in range(1, 17):
+    max_m = max((ev["measure"] for ev in events), default=1)
+    for m in range(1, max_m + 1):
         m_evs = [(ev, gs) for ev, gs in zip(events, griff_states) if ev["measure"] == m]
         if m_evs:
             direction = m_evs[0][1].direction
@@ -356,7 +389,7 @@ def main():
     xml_str = build_clean_polka_musicxml(
         events,
         griff_states,
-        title="Skyline-Melodie + Regularized Beat-This + Viterbi (G-C-F-B, 2/4 Polka)",
+        title="Skyline-Melodie + Regularized Beat-This + Viterbi (G-C-F-B, 2/4 Polka, 30s)",
     )
     xml_path = output_dir / "05_skyline_polka.musicxml"
     xml_path.write_text(xml_str, encoding="utf-8")
@@ -365,8 +398,8 @@ def main():
     tk.setOptions(
         {
             "pageWidth": 2300,
-            "pageHeight": 1400,
-            "scale": 46,
+            "pageHeight": 2600,
+            "scale": 44,
             "adjustPageHeight": True,
             "footer": "none",
         }
@@ -381,8 +414,10 @@ def main():
     png_path.write_bytes(png_bytes)
     print(f"      -> Saved {png_path}")
 
-    print("[4/4] Generating Audio-Diff Verification Files (WAV)...")
-    create_audio_verification_files(Path("samples/input_30s.wav"), events, reg_dbs[:17], output_dir)
+    print("[4/4] Generating Audio-Diff Verification Files (WAV across full 30s)...")
+    create_audio_verification_files(
+        Path("samples/input_30s.wav"), events, griff_states, reg_dbs, output_dir
+    )
 
 
 if __name__ == "__main__":
