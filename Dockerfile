@@ -40,8 +40,13 @@ RUN pip install -r requirements-railway.txt && \
     pip install --no-deps basic-pitch==0.4.0 && \
     pip install --no-deps git+https://github.com/CPJKU/beat_this.git
 
-# 3. Pre-warm JKU Beat-This & Kyutai MuScriptor ('small') checkpoints during build so Railway cold starts are instant
-RUN python -c "from beat_this.inference import File2Beats; File2Beats(checkpoint_path='final0', device='cpu', dbn=False); from muscriptor import TranscriptionModel; TranscriptionModel.load_model('small', device='cpu')"
+# 3. Pre-warm all AI model checkpoints (Beat-This 77MB + MuScriptor 393MB + ByteDance CRNN 164MB = 634MB total)
+#    Placed BEFORE code COPY so Railway's Docker Layer Cache reuses this layer on every code deploy!
+RUN python -c "import urllib.request; from pathlib import Path; \
+    from beat_this.inference import File2Beats; File2Beats(checkpoint_path='final0', device='cpu', dbn=False); \
+    from muscriptor.utils.download import download_if_necessary; download_if_necessary('hf://MuScriptor/muscriptor-small/model.safetensors'); \
+    ckpt_dir = Path.home() / 'piano_transcription_inference_data'; ckpt_dir.mkdir(parents=True, exist_ok=True); \
+    urllib.request.urlretrieve('https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1', str(ckpt_dir / 'note_F1=0.9677_pedal_F1=0.9186.pth'))"
 
 # 4. Copy backend package (including compact demo_assets/) and built React frontend
 COPY harmonica_pipeline/ ./harmonica_pipeline/
