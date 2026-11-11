@@ -44,7 +44,7 @@ RUN pip install -r requirements-railway.txt && \
 #    Placed BEFORE code COPY so Railway's Docker Layer Cache reuses this layer on every code deploy!
 RUN python -c "import urllib.request; from pathlib import Path; \
     from beat_this.inference import File2Beats; File2Beats(checkpoint_path='final0', device='cpu', dbn=False); \
-    from muscriptor.utils.download import download_if_necessary; download_if_necessary('hf://MuScriptor/muscriptor-small/model.safetensors'); \
+    from muscriptor import TranscriptionModel; TranscriptionModel.load_model('small', device='cpu'); \
     ckpt_dir = Path.home() / 'piano_transcription_inference_data'; ckpt_dir.mkdir(parents=True, exist_ok=True); \
     urllib.request.urlretrieve('https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1', str(ckpt_dir / 'note_F1=0.9677_pedal_F1=0.9186.pth'))"
 
