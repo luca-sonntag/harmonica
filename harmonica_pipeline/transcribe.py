@@ -151,42 +151,39 @@ def transcribe_full_audio_hybrid(
     mu_diskant: list[dict] = []
     mu_bass: list[dict] = []
     if include_muscriptor:
-        try:
-            from muscriptor import NoteEndEvent, NoteStartEvent, TranscriptionModel
+        from muscriptor import NoteEndEvent, NoteStartEvent, TranscriptionModel
 
-            t0 = time.perf_counter()
-            mu_dtype = "bfloat16" if not is_gpu else None
-            mu_model = TranscriptionModel.load_model("small", device=device, dtype=mu_dtype)
-            mu_raw: list[dict] = []
-            open_events: dict[int, NoteStartEvent] = {}
-            for ev in mu_model.transcribe(
-                audio_path,
-                instruments=["organ", "tuba"],
-                prelude_forcing=False,
-                batch_size=8 if is_gpu else 6,
-            ):
-                if isinstance(ev, NoteStartEvent):
-                    open_events[ev.index] = ev
-                elif isinstance(ev, NoteEndEvent):
-                    start_ev = open_events.pop(ev.start_event_index, None)
-                    if start_ev is not None and ev.end_time > start_ev.start_time:
-                        mu_raw.append(
-                            {
-                                "start_s": round(float(start_ev.start_time), 4),
-                                "end_s": round(float(ev.end_time), 4),
-                                "pitch": int(start_ev.pitch),
-                                "instrument": start_ev.instrument,
-                                "amplitude": 0.82,
-                            }
-                        )
-            mu_merged = apply_tremolo_merge(mu_raw, max_gap_s=0.045)
-            mu_diskant = [n for n in mu_merged if 58 <= n["pitch"] <= 92]
-            mu_bass = [n for n in mu_merged if n["pitch"] < 58]
-            print(
-                f"      -> [MuScriptor organ+tuba] {len(mu_diskant)} diskant, {len(mu_bass)} bass notes in {time.perf_counter() - t0:.2f}s"
-            )
-        except Exception as exc:
-            print(f"      -> [MuScriptor] Skipped (gated HF repo requires HF_TOKEN or unavailable): {exc}")
+        t0 = time.perf_counter()
+        mu_dtype = "bfloat16" if not is_gpu else None
+        mu_model = TranscriptionModel.load_model("small", device=device, dtype=mu_dtype)
+        mu_raw: list[dict] = []
+        open_events: dict[int, NoteStartEvent] = {}
+        for ev in mu_model.transcribe(
+            audio_path,
+            instruments=["organ", "tuba"],
+            prelude_forcing=False,
+            batch_size=8 if is_gpu else 6,
+        ):
+            if isinstance(ev, NoteStartEvent):
+                open_events[ev.index] = ev
+            elif isinstance(ev, NoteEndEvent):
+                start_ev = open_events.pop(ev.start_event_index, None)
+                if start_ev is not None and ev.end_time > start_ev.start_time:
+                    mu_raw.append(
+                        {
+                            "start_s": round(float(start_ev.start_time), 4),
+                            "end_s": round(float(ev.end_time), 4),
+                            "pitch": int(start_ev.pitch),
+                            "instrument": start_ev.instrument,
+                            "amplitude": 0.82,
+                        }
+                    )
+        mu_merged = apply_tremolo_merge(mu_raw, max_gap_s=0.045)
+        mu_diskant = [n for n in mu_merged if 58 <= n["pitch"] <= 92]
+        mu_bass = [n for n in mu_merged if n["pitch"] < 58]
+        print(
+            f"      -> [MuScriptor organ+tuba] {len(mu_diskant)} diskant, {len(mu_bass)} bass notes in {time.perf_counter() - t0:.2f}s"
+        )
 
     # 3. ByteDance High-Resolution PianoTranscription CRNN
     pti_diskant: list[dict] = []

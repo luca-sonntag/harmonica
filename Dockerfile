@@ -40,13 +40,17 @@ RUN pip install -r requirements-railway.txt && \
     pip install --no-deps basic-pitch==0.4.0 && \
     pip install --no-deps git+https://github.com/CPJKU/beat_this.git
 
-# 3. Pre-warm AI model checkpoints (Beat-This 77MB + ByteDance CRNN 164MB + optional gated MuScriptor 393MB)
+# 3. Pre-warm all 4 AI model checkpoints (Beat-This 77MB + MuScriptor 393MB + ByteDance CRNN 164MB = 634MB total)
 #    Placed BEFORE code COPY so Railway's Docker Layer Cache reuses this layer on every code deploy!
-#    Note: MuScriptor/muscriptor-small is a gated HuggingFace repo requiring HF_TOKEN in Railway Variables.
-ARG HF_TOKEN=""
-ENV HF_TOKEN=${HF_TOKEN}
-RUN python -c "import urllib.request; from pathlib import Path; from beat_this.inference import File2Beats; File2Beats(checkpoint_path='final0', device='cpu', dbn=False); ckpt_dir = Path.home() / 'piano_transcription_inference_data'; ckpt_dir.mkdir(parents=True, exist_ok=True); urllib.request.urlretrieve('https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1', str(ckpt_dir / 'note_F1=0.9677_pedal_F1=0.9186.pth')); print('[Docker Build] Beat-This + ByteDance CRNN weights cached.')" && \
-    python -c "import os; from muscriptor import TranscriptionModel; TranscriptionModel.load_model('small', device='cpu') if os.environ.get('HF_TOKEN') else print('[Docker Build] HF_TOKEN not set; skipping gated MuScriptor pre-warm.')" || echo "[Docker Build] MuScriptor pre-warm skipped (check HF_TOKEN)"
+#    Requires HF_TOKEN in Railway Service Variables (passed automatically as Docker ARG by Railway).
+ARG HF_TOKEN
+RUN HF_TOKEN="${HF_TOKEN}" python -c "import os, urllib.request; from pathlib import Path; \
+    assert os.environ.get('HF_TOKEN'), 'Missing HF_TOKEN! Please add HF_TOKEN in Railway Service -> Variables.'; \
+    from beat_this.inference import File2Beats; File2Beats(checkpoint_path='final0', device='cpu', dbn=False); \
+    from muscriptor import TranscriptionModel; TranscriptionModel.load_model('small', device='cpu'); \
+    ckpt_dir = Path.home() / 'piano_transcription_inference_data'; ckpt_dir.mkdir(parents=True, exist_ok=True); \
+    urllib.request.urlretrieve('https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1', str(ckpt_dir / 'note_F1=0.9677_pedal_F1=0.9186.pth')); \
+    print('[Docker Build] All 4 AI models (Beat-This, MuScriptor, ByteDance CRNN, Basic Pitch) cached successfully.')"
 
 # 4. Copy backend package (including compact demo_assets/) and built React frontend
 COPY harmonica_pipeline/ ./harmonica_pipeline/
