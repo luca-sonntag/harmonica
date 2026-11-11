@@ -24,7 +24,7 @@ def viterbi_optimize_griffschrift(events: list[dict]) -> list[ChordGrip]:
 
     candidates_per_step = [generate_chord_candidates(ev["pitches"]) for ev in events]
 
-    def node_cost(grip: ChordGrip, bass_hint: str | None) -> float:
+    def node_cost(grip: ChordGrip, bass_hint: str | None, target_row: int = 2) -> float:
         cost = 0.0
         # 1. Bass/Harmony Oracle: reward matching bellows direction
         if bass_hint and grip.direction != bass_hint:
@@ -38,8 +38,10 @@ def viterbi_optimize_griffschrift(events: list[dict]) -> list[ChordGrip]:
                 cost += 4.0
             else:
                 cost += 15.0
-        # 3. Prefer central rows (2 and 3) over outer/semitone buttons
+        # 3. Prefer active section row (Row 2 in C-Dur, Row 3 in F-Dur Trio)
         for b in grip.buttons:
+            if b.row != target_row:
+                cost += 2.0 * abs(b.row - target_row)
             if b.row in (1, 4):
                 cost += 1.5
             if b.is_semitone:
@@ -64,12 +66,18 @@ def viterbi_optimize_griffschrift(events: list[dict]) -> list[ChordGrip]:
     dp: list[list[float]] = []
     backptr: list[list[int]] = []
 
-    dp.append([node_cost(g, events[0].get("bass_dir_hint")) for g in candidates_per_step[0]])
+    dp.append(
+        [
+            node_cost(g, events[0].get("bass_dir_hint"), events[0].get("target_row", 2))
+            for g in candidates_per_step[0]
+        ]
+    )
     backptr.append([-1 for _ in candidates_per_step[0]])
 
     for t in range(1, n):
         is_barline = events[t]["measure"] != events[t - 1]["measure"]
         bass_hint = events[t].get("bass_dir_hint")
+        target_row = events[t].get("target_row", 2)
         curr_cands = candidates_per_step[t]
         prev_cands = candidates_per_step[t - 1]
         curr_dp = []
@@ -77,7 +85,7 @@ def viterbi_optimize_griffschrift(events: list[dict]) -> list[ChordGrip]:
         for c_curr in curr_cands:
             best_val = math.inf
             best_j = 0
-            n_cost = node_cost(c_curr, bass_hint)
+            n_cost = node_cost(c_curr, bass_hint, target_row)
             for j, c_prev in enumerate(prev_cands):
                 val = dp[t - 1][j] + n_cost + edge_cost(c_prev, c_curr, is_barline)
                 if val < best_val:

@@ -68,33 +68,45 @@ def create_audio_verification_files(
             continue
         dur_s = (i_end - i_start) / sr
         chord_wave = synthesize_harmonika_chord(ev["pitches"], dur_s, sr=sr)
-        synth_y[i_start : i_start + len(chord_wave)] += 0.65 * chord_wave[: i_end - i_start]
+        n_s = min(i_end - i_start, len(chord_wave))
+        synth_y[i_start : i_start + n_s] += 0.65 * chord_wave[:n_s]
 
     # 2. Synthesize Bass accompaniment (Beat 1 = Helikon Grundbass, Beat 2 = Akkordbass)
     measures_dir: dict[int, str] = {}
+    measures_row: dict[int, int] = {}
     for ev, gs in zip(events, griff_states):
         measures_dir.setdefault(ev["measure"], gs.direction)
+        measures_row.setdefault(ev["measure"], ev.get("target_row", 2))
 
     for m_idx in range(len(downbeats_s) - 1):
         t0, t1 = downbeats_s[m_idx], downbeats_s[m_idx + 1]
         t_mid = 0.5 * (t0 + t1)
         direction = measures_dir.get(m_idx + 1, "DRUCK")
-        bass_pitches = [36, 48] if direction == "DRUCK" else [38, 50]
-        akk_pitches = [52, 55] if direction == "DRUCK" else [50, 55]
+        t_row = measures_row.get(m_idx + 1, 2)
+        if t_row == 3:
+            # Row 3 (F-Dur Trio): DRUCK = F-Bass (41, 53), ZUG = C-Bass (36, 48)
+            bass_pitches = [41, 53] if direction == "DRUCK" else [36, 48]
+            akk_pitches = [53, 57] if direction == "DRUCK" else [52, 55]
+        else:
+            # Row 2 (C-Dur): DRUCK = C-Bass (36, 48), ZUG = G/D-Bass (38, 50)
+            bass_pitches = [36, 48] if direction == "DRUCK" else [38, 50]
+            akk_pitches = [52, 55] if direction == "DRUCK" else [50, 55]
 
         # Beat 1: Helikon Grundbass
         i_b1 = int(t0 * sr)
         i_b1_end = min(len(synth_y), int((t0 + 0.25 * (t1 - t0)) * sr))
         if i_b1_end > i_b1:
             bw = synthesize_harmonika_chord(bass_pitches, (i_b1_end - i_b1) / sr, sr=sr)
-            synth_y[i_b1:i_b1_end] += 0.35 * bw[: i_b1_end - i_b1]
+            n_b1 = min(i_b1_end - i_b1, len(bw))
+            synth_y[i_b1 : i_b1 + n_b1] += 0.35 * bw[:n_b1]
 
         # Beat 2: Akkord-Nachschlag
         i_b2 = int(t_mid * sr)
         i_b2_end = min(len(synth_y), int((t_mid + 0.25 * (t1 - t0)) * sr))
         if i_b2_end > i_b2:
             aw = synthesize_harmonika_chord(akk_pitches, (i_b2_end - i_b2) / sr, sr=sr)
-            synth_y[i_b2:i_b2_end] += 0.28 * aw[: i_b2_end - i_b2]
+            n_b2 = min(i_b2_end - i_b2, len(aw))
+            synth_y[i_b2 : i_b2 + n_b2] += 0.28 * aw[:n_b2]
 
     # 3. Add a subtle woodblock/metronome tick on each regularized measure Downbeat ("Schlag 1")
     for db in downbeats_s:

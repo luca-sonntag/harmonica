@@ -23,12 +23,15 @@ def inject_druckbalken_into_verovio_svg(
     svg_str: str,
     measure_directions: dict[int, str],
     start_measure_idx: int,
+    page_idx: int = 1,
+    total_pages: int = 1,
+    title: str = "Steirische Polka (G-C-F-B) – Normalnoten & Griffschrift (System Rosenzopf)",
 ) -> tuple[str, int]:
     """
     Parses a single Verovio SVG page, locates the 2nd staff (Griffschrift) inside each
     <g class="measure">, extracts its exact horizontal span [x1, x2] and bottom line y_bottom,
     and injects a thick horizontal Rosenzopf Druckbalken for every measure where
-    direction == "DRUCK".
+    direction == "DRUCK", plus a clean centered page header/title.
 
     Returns (modified_svg_str, next_measure_idx).
     """
@@ -36,6 +39,55 @@ def inject_druckbalken_into_verovio_svg(
     ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
     root = ET.fromstring(svg_str)
     svg_ns = "{http://www.w3.org/2000/svg}"
+
+    # Inject clean UTF-8 header into the definition-scale SVG container
+    def_scale_el = next(
+        (el for el in root.iter() if "definition-scale" in el.attrib.get("class", "").split()),
+        root,
+    )
+    if page_idx == 1:
+        title_el = ET.Element(
+            f"{svg_ns}text",
+            {
+                "x": "10500",
+                "y": "950",
+                "text-anchor": "middle",
+                "font-family": "Georgia, Times New Roman, serif",
+                "font-size": "460px",
+                "font-weight": "bold",
+                "fill": "#111111",
+            },
+        )
+        title_el.text = title
+        def_scale_el.append(title_el)
+
+        sub_el = ET.Element(
+            f"{svg_ns}text",
+            {
+                "x": "10500",
+                "y": "1420",
+                "text-anchor": "middle",
+                "font-family": "Arial, sans-serif",
+                "font-size": "260px",
+                "fill": "#444444",
+            },
+        )
+        sub_el.text = f"Stimmung: G-C-F-B (2/4 Polka)  |  B/b = 2. Reihe (C-Dur)  |  C/c = 3. Reihe (F-Dur Trio)  |  Balken unten = Druck  |  Seite 1 / {total_pages}"
+        def_scale_el.append(sub_el)
+    else:
+        hdr_el = ET.Element(
+            f"{svg_ns}text",
+            {
+                "x": "10500",
+                "y": "950",
+                "text-anchor": "middle",
+                "font-family": "Georgia, Times New Roman, serif",
+                "font-size": "320px",
+                "fill": "#333333",
+            },
+        )
+        hdr_el.text = f"{title}  –  Seite {page_idx} / {total_pages}"
+        def_scale_el.append(hdr_el)
 
     measures = [
         el for el in root.iter()
@@ -151,12 +203,13 @@ def render_musicxml_to_a4_pdf(
             "pageHeight": 2970,
             "scale": 40,
             "adjustPageHeight": False,
-            "pageMarginTop": 100,
+            "pageMarginTop": 180,
             "pageMarginBottom": 120,
             "pageMarginLeft": 100,
             "pageMarginRight": 100,
             "spacingSystem": 12,
             "spacingStaff": 10,
+            "header": "none",
             "footer": "none",
         }
     )
@@ -178,7 +231,11 @@ def render_musicxml_to_a4_pdf(
     for page_idx in range(1, page_count + 1):
         raw_svg = tk.renderToSVG(page_idx)
         enhanced_svg, curr_measure_idx = inject_druckbalken_into_verovio_svg(
-            raw_svg, measure_directions, start_measure_idx=curr_measure_idx
+            raw_svg,
+            measure_directions,
+            start_measure_idx=curr_measure_idx,
+            page_idx=page_idx,
+            total_pages=page_count,
         )
 
         svg_path = output_dir / f"{prefix}_page{page_idx}.svg"

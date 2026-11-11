@@ -81,12 +81,11 @@ def build_dual_system_musicxml(
                     )
                     in_druck_bracket = False
 
-            # Determine active Bass Row ID (B/b for Row 2, C/c for Row 3, A/a for Row 1, D/d for Row 4)
-            # In standard G-C-F-B Polka playing, Row 2 (B/b) is the main bass row; Row 3 (C/c) on F/C passages
+            # Determine active Bass Row ID (B/b for Row 2 C-Dur, C/c for Row 3 F-Dur Trio)
             dom_row = 2
             if m_items:
-                row_votes = [gs.primary_row for _, gs in m_items]
-                if all(r == 3 for r in row_votes) and m_dir == "DRUCK":
+                target_rows = [ev.get("target_row", gs.primary_row) for ev, gs in m_items]
+                if sum(1 for r in target_rows if r == 3) > len(target_rows) // 2:
                     dom_row = 3
             grund_bass_lbl, akk_bass_lbl = BASS_ROW_LABELS.get(dom_row, ("B", "b"))
 
