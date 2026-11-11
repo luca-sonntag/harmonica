@@ -129,12 +129,12 @@ def transcribe_full_audio_hybrid(
 
     is_gpu = device.startswith("cuda")
     if include_muscriptor is None:
-        include_muscriptor = is_gpu
-    include_crnn = is_gpu or (os.environ.get("HARMONICA_CPU_CRNN", "0") == "1")
+        include_muscriptor = os.environ.get("HARMONICA_DISABLE_MUSCRIPTOR", "0") != "1"
+    include_crnn = os.environ.get("HARMONICA_DISABLE_CRNN", "0") != "1"
 
     duration_s = float(librosa.get_duration(path=str(audio_path)))
     print(
-        f"      -> Audio duration: {duration_s:.2f}s | Device: {device} | Profile: {'GPU-Ensemble' if is_gpu else 'Cloud-CPU (Fast ONNX)'}"
+        f"      -> Audio duration: {duration_s:.2f}s | Device: {device} | Full 4-Model Ensemble (Beat-This + MuScriptor + CRNN + BasicPitch)"
     )
 
     # 1. JKU Linz Beat-This (Neural Beat & Downbeat Tracker - ~1.4s on CPU, ~0.4s on GPU)
@@ -147,7 +147,7 @@ def transcribe_full_audio_hybrid(
         f"      -> [Beat-This] {len(downbeats_list)} downbeats, {len(beats_list)} beats in {time.perf_counter() - t0:.2f}s"
     )
 
-    # 2. Kyutai/Mirelo MuScriptor (GPU only by default)
+    # 2. Kyutai/Mirelo MuScriptor ('small', constrained to 'organ' + 'tuba', batched with prelude_forcing=False)
     mu_diskant: list[dict] = []
     mu_bass: list[dict] = []
     if include_muscriptor:
@@ -155,10 +155,16 @@ def transcribe_full_audio_hybrid(
             from muscriptor import NoteEndEvent, NoteStartEvent, TranscriptionModel
 
             t0 = time.perf_counter()
-            mu_model = TranscriptionModel.load_model("small", device=device)
+            mu_dtype = "bfloat16" if not is_gpu else None
+            mu_model = TranscriptionModel.load_model("small", device=device, dtype=mu_dtype)
             mu_raw: list[dict] = []
             open_events: dict[int, NoteStartEvent] = {}
-            for ev in mu_model.transcribe(audio_path, instruments=["organ", "tuba"]):
+            for ev in mu_model.transcribe(
+                audio_path,
+                instruments=["organ", "tuba"],
+                prelude_forcing=False,
+                batch_size=8 if is_gpu else 6,
+            ):
                 if isinstance(ev, NoteStartEvent):
                     open_events[ev.index] = ev
                 elif isinstance(ev, NoteEndEvent):

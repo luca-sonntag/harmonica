@@ -40,8 +40,8 @@ RUN pip install -r requirements-railway.txt && \
     pip install --no-deps basic-pitch==0.4.0 && \
     pip install --no-deps git+https://github.com/CPJKU/beat_this.git
 
-# 3. Pre-warm JKU Beat-This checkpoint during build so Railway cold starts are instant
-RUN python -c "from beat_this.inference import File2Beats; File2Beats(checkpoint_path='final0', device='cpu', dbn=False)"
+# 3. Pre-warm JKU Beat-This & Kyutai MuScriptor ('small') checkpoints during build so Railway cold starts are instant
+RUN python -c "from beat_this.inference import File2Beats; File2Beats(checkpoint_path='final0', device='cpu', dbn=False); from muscriptor import TranscriptionModel; TranscriptionModel.load_model('small', device='cpu')"
 
 # 4. Copy backend package (including compact demo_assets/) and built React frontend
 COPY harmonica_pipeline/ ./harmonica_pipeline/

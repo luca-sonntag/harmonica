@@ -227,13 +227,10 @@ async def transcribe_uploaded_media(
     if not cache_path.exists() and full_ref_cache.exists() and abs(ingested.duration_s - 105.51) < 0.45:
         shutil.copyfile(full_ref_cache, cache_path)
 
-    # For fresh uploads > 40s, skip slow MuScriptor token loop and use fast GPU Beat-This + ByteDance CRNN + Basic Pitch
-    use_muscriptor = cache_path.exists() or (ingested.duration_s <= 40.0)
-
     tx_data = transcribe_full_audio_hybrid(
         ingested.wav_path,
         cache_path=cache_path,
-        include_muscriptor=use_muscriptor,
+        include_muscriptor=True,
     )
 
     combined_bass = tx_data["bp_bass"] + tx_data["pti_bass"] + tx_data["mu_bass"]
