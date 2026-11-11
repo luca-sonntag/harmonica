@@ -185,8 +185,8 @@ def transcribe_full_audio_hybrid(
             print(
                 f"      -> [MuScriptor organ+tuba] {len(mu_diskant)} diskant, {len(mu_bass)} bass notes in {time.perf_counter() - t0:.2f}s"
             )
-        except ImportError:
-            print("      -> [MuScriptor] Not installed in this environment; skipping.")
+        except Exception as exc:
+            print(f"      -> [MuScriptor] Skipped (gated HF repo requires HF_TOKEN or unavailable): {exc}")
 
     # 3. ByteDance High-Resolution PianoTranscription CRNN
     pti_diskant: list[dict] = []
