@@ -51,8 +51,8 @@ def apply_tremolo_merge(notes: list[dict], max_gap_s: float = 0.065) -> list[dic
     return sorted(merged, key=lambda n: (n["start_s"], n["pitch"]))
 
 
-def evaluate_model_notes(name: str, raw_notes: list[dict], elapsed_s: float) -> dict:
-    merged = apply_tremolo_merge(raw_notes)
+def evaluate_model_notes(name: str, raw_notes: list[dict], elapsed_s: float, merge_tremolo: bool = True) -> dict:
+    merged = apply_tremolo_merge(raw_notes) if merge_tremolo else raw_notes
     bass = [n for n in merged if n["pitch"] < 58]
     diskant = [n for n in merged if 58 <= n["pitch"] <= 96]
 
@@ -92,7 +92,9 @@ def run_muscriptor(audio_path: Path, device: str) -> tuple[list[dict], float, di
     open_events: dict[int, NoteStartEvent] = {}
     instruments_seen: dict[str, int] = {}
 
-    for ev in model.transcribe(audio_path):
+    # Constrain MuScriptor specifically to Reed/Accordion ('organ' in GM) + Helikon ('tuba')
+    allowed_instruments = ["organ", "tuba"]
+    for ev in model.transcribe(audio_path, instruments=allowed_instruments):
         if isinstance(ev, NoteStartEvent):
             open_events[ev.index] = ev
             instruments_seen[ev.instrument] = instruments_seen.get(ev.instrument, 0) + 1
@@ -194,7 +196,7 @@ def main():
     mu_eval = None
     try:
         mu_notes, mu_time, mu_inst = run_muscriptor(audio_path, device=device)
-        mu_eval = evaluate_model_notes("2. Kyutai/Mirelo MuScriptor (small)", mu_notes, elapsed_s=mu_time)
+        mu_eval = evaluate_model_notes("2. Kyutai/Mirelo MuScriptor (small, organ+tuba)", mu_notes, elapsed_s=mu_time, merge_tremolo=False)
         mu_eval["instruments"] = mu_inst
     except Exception as exc:
         print(f"      -> [Info] MuScriptor weights gated on HF (accept at https://huggingface.co/MuScriptor/muscriptor-small): {type(exc).__name__}")
@@ -231,9 +233,11 @@ def main():
         ax.axhline(67, color="#f0ad4e", linestyle="-.", linewidth=1.0)
 
         for n in m_data["bass_notes"]:
-            ax.plot([n["start_s"], n["end_s"]], [n["pitch"], n["pitch"]], color="#d9534f", linewidth=3.5, zorder=3)
+            end_plot = max(n["start_s"] + 0.02, n["end_s"] - 0.02)
+            ax.plot([n["start_s"], end_plot], [n["pitch"], n["pitch"]], color="#d9534f", linewidth=3.5, solid_capstyle="butt", zorder=3)
         for n in m_data["diskant_notes"]:
-            ax.plot([n["start_s"], n["end_s"]], [n["pitch"], n["pitch"]], color="#0275d8", linewidth=3.5, zorder=3)
+            end_plot = max(n["start_s"] + 0.02, n["end_s"] - 0.02)
+            ax.plot([n["start_s"], end_plot], [n["pitch"], n["pitch"]], color="#0275d8", linewidth=3.5, solid_capstyle="butt", zorder=3)
 
         ax.set_title(title + f" | Green vertical lines = JKU 'Beat-This' Downbeats ({bt_info['bpm']} BPM, {bt_info['meter_beats_per_bar']}/4)")
         ax.set_ylabel("MIDI Pitch")
@@ -260,6 +264,8 @@ def main():
         "models": models_summary,
         "pti_diskant_notes": pti_eval["diskant_notes"],
         "pti_bass_notes": pti_eval["bass_notes"],
+        "mu_diskant_notes": mu_eval["diskant_notes"] if mu_eval else [],
+        "mu_bass_notes": mu_eval["bass_notes"] if mu_eval else [],
     }
     (output_dir / "03_model_comparison.json").write_text(json.dumps(bench_out, indent=2), encoding="utf-8")
     print(f"\nSaved visual comparison to {comp_plot_path} and outputs/03_model_comparison.json")

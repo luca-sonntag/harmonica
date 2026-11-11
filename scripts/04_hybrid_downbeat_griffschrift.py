@@ -50,10 +50,9 @@ def quantize_to_downbeat_measures(
             b for b in bass_notes
             if (t_bar_start - 0.08) <= b["start_s"] < (t_bar_end - 0.05)
         ]
-        # Deep Helikon bass on Beat 1 (MIDI 36 = C2 -> DRUCK; MIDI 38 = D2 or 43 = G2 -> ZUG)
-        # Or chord tones (MIDI 52 = E3 -> DRUCK; MIDI 50 = D3 -> ZUG)
-        druck_score = sum(1 for b in bar_bass if (b["pitch"] % 12) in (0, 4))
-        zug_score = sum(1 for b in bar_bass if (b["pitch"] % 12) in (2, 11))
+        # Deep Helikon bass on Beat 1 (MIDI 36/48 = C2/C3 -> DRUCK; MIDI 38/50 = D2/D3 -> ZUG)
+        druck_score = sum(2 if b["pitch"] in (36, 48) else 1 for b in bar_bass if (b["pitch"] % 12) in (0, 4))
+        zug_score = sum(2 if b["pitch"] in (38, 50) else 1 for b in bar_bass if (b["pitch"] % 12) in (2, 11))
         bass_dir_hint = None
         if druck_score > zug_score:
             bass_dir_hint = "DRUCK"
@@ -213,8 +212,8 @@ def main():
 
     downbeats_s = comp_data["beat_this"]["downbeats_s"]
     diskant_notes = bp_data["diskant_notes"]
-    # Combine Basic Pitch + ByteDance PTI bass notes for rock-solid Zug/Druck oracle
-    combined_bass = bp_data["bass_notes"] + comp_data["pti_bass_notes"]
+    # Combine MuScriptor (tuba/organ) + Basic Pitch + ByteDance PTI bass notes for rock-solid Zug/Druck oracle
+    combined_bass = bp_data["bass_notes"] + comp_data["pti_bass_notes"] + comp_data.get("mu_bass_notes", [])
 
     print("[1/3] Quantizing onto JKU 'Beat-This' 2/4 Polka Downbeat Grid (12 Measures)...")
     events = quantize_to_downbeat_measures(diskant_notes, combined_bass, downbeats_s, max_measures=12)
