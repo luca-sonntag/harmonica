@@ -20,6 +20,9 @@ from harmonica_pipeline import (
     staff_step_to_musicxml_pitch,
     viterbi_optimize_griffschrift,
 )
+from harmonica_pipeline.media_ingest import get_ffmpeg_executable, ingest_media_file
+import subprocess
+import tempfile
 
 
 class TestHarmonicaDomainInvariants(unittest.TestCase):
@@ -134,6 +137,46 @@ class TestHarmonicaDomainInvariants(unittest.TestCase):
         shift, hit_rate = find_best_transposition(c_major_phrase)
         self.assertEqual(shift, 0)
         self.assertEqual(hit_rate, 100.0)
+
+    def test_video_to_audio_ffmpeg_ingestion(self):
+        """
+        Verifies that uploading an MP4 video file automatically extracts a 22.05 kHz
+        Mono WAV audio file and a JPEG preview frame via FFmpeg.
+        """
+        ffmpeg_exe = get_ffmpeg_executable()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            test_mp4 = tmp_dir / "test_harmonika.mp4"
+            # Generate a 2-second test MP4 video with a 440 Hz tone
+            subprocess.run(
+                [
+                    ffmpeg_exe,
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=c=darkgreen:s=320x240:d=2",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=440:duration=2",
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    str(test_mp4),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            ingested = ingest_media_file(test_mp4, "test_harmonika.mp4", tmp_dir / "job")
+            self.assertEqual(ingested.media_kind, "VIDEO")
+            self.assertTrue(ingested.wav_path.exists())
+            self.assertAlmostEqual(ingested.duration_s, 2.0, delta=0.25)
+            self.assertIsNotNone(ingested.preview_frame_path)
+            self.assertTrue(ingested.preview_frame_path.exists())
 
 
 if __name__ == "__main__":
