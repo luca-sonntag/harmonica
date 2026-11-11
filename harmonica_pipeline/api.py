@@ -272,3 +272,8 @@ def serve_sample_file(file_path: str):
     if not str(target).startswith(str(SAMPLES_DIR.resolve())) or not target.exists():
         raise HTTPException(status_code=404, detail="Sample-Datei nicht gefunden.")
     return FileResponse(str(target))
+
+
+WEB_DIST_DIR = ROOT_DIR / "web" / "dist"
+if WEB_DIST_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(WEB_DIST_DIR), html=True), name="web_ui")
