@@ -64,27 +64,27 @@ $$\text{pitch}(\text{row} + 1, \text{button}, \text{dir}) = \text{pitch}(\text{r
 ## 4. Referenz-Belegungstabelle: Standard-Stimmung `G-C-F-B` (Diskant)
 
 > [!NOTE]
-> **Knopf-Nummerierung:**
-> Knopf `1` ist physisch der **oberste Knopf** (am nächsten zum Kinn des Spielers, **tiefste** Töne). In manchen Tabellen wird er als „unten“ bezeichnet, weil er die tiefste Frequenz hat. Beim Spielen wandert die Hand für höhere Töne Richtung Boden (größere Knopf-Nummer).
-> In Klammern steht jeweils der exakte **MIDI-Pitch** ($60 = c'$).
+> **Knopf-Nummerierung & Akustischer MIDI-Pitch (8'-Grundreihe):**
+> Knopf `1` ist physisch der **oberste Knopf** (am nächsten zum Kinn des Spielers, **tiefste** Töne). Beim Spielen wandert die Hand für höhere Töne Richtung Boden (größere Knopf-Nummer).
+> In Klammern steht jeweils der **akustisch gemessene MIDI-Pitch der 8'-Grundreihe** ($60 = c' = 261{,}63\text{ Hz}$, Gleichton der 2. Reihe = $g' = \text{MIDI } 67 = 392{,}0\text{ Hz}$). *(Hinweis: In mancher Harmonika-Literatur werden alle Oktavstriche eine Oktave höher geschrieben, akustisch liegen die Grundfrequenzen jedoch exakt bei den hier angegebenen MIDI-Werten).*
 
 | Knopf-Nr. | 1. Reihe (`G`) | 2. Reihe (`C`) | 3. Reihe (`F`) | 4. Reihe (`B` / `Bb`) |
 | :---: | :--- | :--- | :--- | :--- |
-| **1** *(Zusatz/Halbton)* | Druck: $gis'$ (`68`)<br>Zug: $gis'$ (`68`) | Druck: $c'$ (`60`)<br>Zug: $f'$ (`65`) | Druck: $f'$ (`65`)<br>Zug: $b'$ (`70`) | Druck: $b'$ (`70`)<br>Zug: $es''$ (`75`) |
-| **2** | Druck: $cis''$ (`73`)<br>Zug: $cis''$ (`73`) | Druck: $e'$ (`64`)<br>Zug: $g'$ (`67`) | Druck: $a'$ (`69`)<br>Zug: $c''$ (`72`) | Druck: $d''$ (`74`)<br>Zug: $f''$ (`77`) |
-| **3** | Druck: $d'$ (`62`)<br>Zug: $fis'$ (`66`) | Druck: $g'$ (`67`)<br>Zug: $h'$ (`71`) | Druck: $c''$ (`72`)<br>Zug: $e''$ (`76`) | Druck: $f''$ (`77`)<br>Zug: $a''$ (`81`) |
-| **4** | Druck: $g'$ (`67`)<br>Zug: $a'$ (`69`) | Druck: $c''$ (`72`)<br>Zug: $d''$ (`74`) | Druck: $f''$ (`77`)<br>Zug: $g''$ (`79`) | Druck: $b''$ (`82`)<br>Zug: $c'''$ (`84`) |
-| **5** | Druck: $h'$ (`71`)<br>Zug: $c''$ (`72`) | Druck: $e''$ (`76`)<br>Zug: $f''$ (`77`) | Druck: $a''$ (`81`)<br>Zug: $b''$ (`82`) | Druck: $d'''$ (`86`)<br>Zug: $es'''$ (`87`) |
-| **6 (Gleichton)** | Druck: $d''$ (`74`)<br>Zug: $e''$ (`76`) | **Druck: $g''$ (`79`)**<br>**Zug: $g''$ (`79`)** | **Druck: $c'''$ (`84`)**<br>**Zug: $c'''$ (`84`)** | **Druck: $f'''$ (`89`)**<br>**Zug: $f'''$ (`89`)** |
-| **7** | Druck: $g''$ (`79`)<br>Zug: $fis''$ (`78`) | Druck: $c'''$ (`84`)<br>Zug: $h''$ (`83`) | Druck: $f'''$ (`89`)<br>Zug: $e'''$ (`88`) | Druck: $b'''$ (`94`)<br>Zug: $a'''$ (`93`) |
-| **8** | Druck: $h''$ (`83`)<br>Zug: $a''$ (`81`) | Druck: $e'''$ (`88`)<br>Zug: $d'''$ (`86`) | Druck: $a'''$ (`93`)<br>Zug: $g'''$ (`91`) | Druck: $d''''$ (`98`)<br>Zug: $c''''$ (`96`) |
-| **9** | Druck: $d'''$ (`86`)<br>Zug: $c'''$ (`84`) | Druck: $g'''$ (`91`)<br>Zug: $f'''$ (`89`) | Druck: $c''''$ (`96`)<br>Zug: $b'''$ (`94`) | Druck: $f''''$ (`101`)<br>Zug: $es''''$ (`99`) |
-| **10** | Druck: $g'''$ (`91`)<br>Zug: $e'''$ (`88`) | Druck: $c''''$ (`96`)<br>Zug: $a'''$ (`93`) | Druck: $f''''$ (`101`)<br>Zug: $d''''$ (`98`) | Druck: $b''''$ (`106`)<br>Zug: $g''''$ (`103`) |
-| **11** | Druck: $h'''$ (`95`)<br>Zug: $fis'''$ (`90`) | Druck: $e''''$ (`100`)<br>Zug: $h'''$ (`95`) | Druck: $a''''$ (`105`)<br>Zug: $e''''$ (`100`) | – |
-| **12** | Druck: $d''''$ (`98`)<br>Zug: $a'''$ (`93`) | Druck: $g''''$ (`103`)<br>Zug: $d''''$ (`98`) | – | – |
+| **1** *(Zusatz/Halbton)* | Druck: $gis$ (`56`)<br>Zug: $gis$ (`56`) | Druck: $c$ (`48`)<br>Zug: $f$ (`53`) | Druck: $f$ (`53`)<br>Zug: $b$ (`58`) | Druck: $b$ (`58`)<br>Zug: $es'$ (`63`) |
+| **2** | Druck: $cis'$ (`61`)<br>Zug: $cis'$ (`61`) | Druck: $e$ (`52`)<br>Zug: $g$ (`55`) | Druck: $a$ (`57`)<br>Zug: $c'$ (`60`) | Druck: $d'$ (`62`)<br>Zug: $f'$ (`65`) |
+| **3** | Druck: $d$ (`50`)<br>Zug: $fis$ (`54`) | Druck: $g$ (`55`)<br>Zug: $h$ (`59`) | Druck: $c'$ (`60`)<br>Zug: $e'$ (`64`) | Druck: $f'$ (`65`)<br>Zug: $a'$ (`69`) |
+| **4** | Druck: $g$ (`55`)<br>Zug: $a$ (`57`) | Druck: $c'$ (`60`)<br>Zug: $d'$ (`62`) | Druck: $f'$ (`65`)<br>Zug: $g'$ (`67`) | Druck: $b'$ (`70`)<br>Zug: $c''$ (`72`) |
+| **5** | Druck: $h$ (`59`)<br>Zug: $c'$ (`60`) | Druck: $e'$ (`64`)<br>Zug: $f'$ (`65`) | Druck: $a'$ (`69`)<br>Zug: $b'$ (`70`) | Druck: $d''$ (`74`)<br>Zug: $es''$ (`75`) |
+| **6 (Gleichton)** | Druck: $d'$ (`62`)<br>Zug: $e'$ (`64`) | **Druck: $g'$ (`67`)**<br>**Zug: $g'$ (`67`)** | **Druck: $c''$ (`72`)**<br>**Zug: $c''$ (`72`)** | **Druck: $f''$ (`77`)**<br>**Zug: $f''$ (`77`)** |
+| **7** | Druck: $g'$ (`67`)<br>Zug: $fis'$ (`66`) | Druck: $c''$ (`72`)<br>Zug: $h'$ (`71`) | Druck: $f''$ (`77`)<br>Zug: $e''$ (`76`) | Druck: $b''$ (`82`)<br>Zug: $a''$ (`81`) |
+| **8** | Druck: $h'$ (`71`)<br>Zug: $a'$ (`69`) | Druck: $e''$ (`76`)<br>Zug: $d''$ (`74`) | Druck: $a''$ (`81`)<br>Zug: $g''$ (`79`) | Druck: $d'''$ (`86`)<br>Zug: $c'''$ (`84`) |
+| **9** | Druck: $d''$ (`74`)<br>Zug: $c''$ (`72`) | Druck: $g''$ (`79`)<br>Zug: $f''$ (`77`) | Druck: $c'''$ (`84`)<br>Zug: $b''$ (`82`) | Druck: $f'''$ (`89`)<br>Zug: $es'''$ (`87`) |
+| **10** | Druck: $g''$ (`79`)<br>Zug: $e''$ (`76`) | Druck: $c'''$ (`84`)<br>Zug: $a''$ (`81`) | Druck: $f'''$ (`89`)<br>Zug: $d'''$ (`86`) | Druck: $b'''$ (`94`)<br>Zug: $g'''$ (`91`) |
+| **11** | Druck: $h''$ (`83`)<br>Zug: $fis''$ (`78`) | Druck: $e'''$ (`88`)<br>Zug: $h''$ (`83`) | Druck: $a'''$ (`93`)<br>Zug: $e'''$ (`88`) | – |
+| **12** | Druck: $d'''$ (`86`)<br>Zug: $a''$ (`81`) | Druck: $g'''$ (`91`)<br>Zug: $d'''$ (`86`) | – | – |
 
 ### Beobachtung der Redundanz (Mehrdeutigkeit):
-Schau dir in der Tabelle den Ton **$c''$ (MIDI `72`)** an. Er existiert **4-mal** auf dem Instrument:
+Schau dir in der Tabelle den Ton **$c'$ (MIDI `60`)** an. Er existiert **4-mal** auf dem Instrument:
 1. `(Reihe 1, Knopf 5, ZUG)`
 2. `(Reihe 2, Knopf 4, DRUCK)`
 3. `(Reihe 3, Knopf 3, DRUCK)`

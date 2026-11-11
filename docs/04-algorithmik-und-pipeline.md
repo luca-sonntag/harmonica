@@ -39,7 +39,7 @@ Auf einer `G-C-F-B`-Harmonika lassen sich Stücke nur in vier Dur-Tonarten sinnv
 ### Algorithmus zur optimalen Transposition ($\Delta p$):
 Wenn das Eingabestück z. B. in **D-Dur** oder **A-Dur** vorliegt, testen wir alle sinnvollen Halbtontranspositionen $\Delta p \in [-6 \dots +6]$ und wählen dasjenige $\Delta p$, das:
 1. **100 % der Melodietöne** in den gültigen Wertebereich der `G-C-F-B`-Lookup-Tabelle abbildet (vorzugsweise auf Reihe 2 = C-Dur oder Reihe 3 = F-Dur).
-2. Die **Tonumfangs-Mitte (Centroid)** der Melodie möglichst nah an den **Gleichton (Knopf 6, `MIDI 79` in Reihe 2 bzw. `MIDI 84` in Reihe 3)** legt, damit das Stück im bequemsten mittleren Bereich des Griffbretts liegt.
+2. Die **Tonumfangs-Mitte (Centroid)** der Melodie möglichst nah an den **Gleichton (Knopf 6, akustisch `MIDI 67` in Reihe 2 bzw. `MIDI 72` in Reihe 3)** legt, damit das Stück im bequemsten mittleren Bereich des Griffbretts liegt.
 
 ---
 
