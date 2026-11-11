@@ -1,0 +1,21 @@
+# Python & Virtual Environments
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Audio, Video & Generated Outputs
+samples/
+outputs/
+*.wav
+*.mp3
+*.mp4
+*.mid
+*.midi
+
+# IDE & OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
