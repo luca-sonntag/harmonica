@@ -232,113 +232,155 @@ export default function App() {
           </section>
 
           {/* [02] Technische Werkdaten & Video-Konvertierungs-Status */}
-          {result && (
-            <section className="panel-section">
-              <div className="section-header">
-                <div>
-                  <span className="section-index">[02] Werkblatt-Protokoll</span>
-                  <h2 className="section-heading">Konvertierung &amp; Analyse</h2>
-                </div>
+          <section className="panel-section">
+            <div className="section-header">
+              <div>
+                <span className="section-index">[02] Werkblatt-Protokoll</span>
+                <h2 className="section-heading">Konvertierung &amp; Analyse</h2>
               </div>
+            </div>
 
-              {result.video_frame_url && (
-                <div className="video-preview-frame">
-                  <img
-                    src={result.video_frame_url}
-                    alt="Extrahierter Video-Frame der Harmonika-Aufnahme"
-                  />
-                  <div className="video-frame-caption">
-                    <span>QUELLE: {result.original_filename}</span>
-                    <span>VIDEO → AUDIO</span>
+            {result ? (
+              <>
+                {result.video_frame_url && (
+                  <div className="video-preview-frame">
+                    <img
+                      src={result.video_frame_url}
+                      alt="Extrahierter Video-Frame der Harmonika-Aufnahme"
+                    />
+                    <div className="video-frame-caption">
+                      <span>QUELLE: {result.original_filename}</span>
+                      <span>VIDEO → AUDIO</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <table className="spec-table">
-                <tbody>
-                  <tr>
-                    <th>Eingang</th>
-                    <td>
-                      {result.media_kind}: {result.original_filename}
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Medien-Pipeline</th>
-                    <td>{result.conversion_step}</td>
-                  </tr>
-                  <tr>
-                    <th>Laufzeit / Takt</th>
-                    <td>
-                      {result.duration_s.toFixed(1)} s · {result.time_signature} ({result.measures_count}{' '}
-                      Takte)
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Balgrichtung</th>
-                    <td>
-                      {result.druck_measures} Takte DRUCK · {result.zug_measures} Takte ZUG
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Aktive Reihen</th>
-                    <td>{result.rows_used.join(' / ')}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-          )}
+                <table className="spec-table">
+                  <tbody>
+                    <tr>
+                      <th>Eingang</th>
+                      <td>
+                        {result.media_kind}: {result.original_filename}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Medien-Pipeline</th>
+                      <td>{result.conversion_step}</td>
+                    </tr>
+                    <tr>
+                      <th>Laufzeit / Takt</th>
+                      <td>
+                        {result.duration_s.toFixed(1)} s · {result.time_signature} ({result.measures_count}{' '}
+                        Takte)
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Balgrichtung</th>
+                      <td>
+                        {result.druck_measures} Takte DRUCK · {result.zug_measures} Takte ZUG
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Aktive Reihen</th>
+                      <td>{result.rows_used.join(' / ')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </>
+            ) : (
+              <div className="empty-panel-placeholder">
+                <table className="spec-table muted">
+                  <tbody>
+                    <tr>
+                      <th>Eingang</th>
+                      <td>Keine Datei gewählt</td>
+                    </tr>
+                    <tr>
+                      <th>Medien-Pipeline</th>
+                      <td>Wartet auf Audio-/Video-Upload…</td>
+                    </tr>
+                    <tr>
+                      <th>Laufzeit / Takt</th>
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <th>Balgrichtung</th>
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <th>Aktive Reihen</th>
+                      <td>—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
 
           {/* [03] Akustische Gegenprobe (Audio-Diff) */}
-          {result && (
-            <section className="panel-section">
-              <div className="section-header">
-                <div>
-                  <span className="section-index">[03] Hörprobe</span>
-                  <h2 className="section-heading">Akustischer Noten-Abgleich</h2>
+          <section className="panel-section">
+            <div className="section-header">
+              <div>
+                <span className="section-index">[03] Hörprobe</span>
+                <h2 className="section-heading">Akustischer Noten-Abgleich</h2>
+              </div>
+            </div>
+
+            {result ? (
+              <>
+                <div className="audio-tabs" role="tablist">
+                  <button
+                    type="button"
+                    className={`audio-tab ${audioMode === 'stereo' ? 'active' : ''}`}
+                    onClick={() => setAudioMode('stereo')}
+                  >
+                    Stereo-Diff (L/R)
+                  </button>
+                  <button
+                    type="button"
+                    className={`audio-tab ${audioMode === 'synth' ? 'active' : ''}`}
+                    onClick={() => setAudioMode('synth')}
+                  >
+                    Nur Notenblatt
+                  </button>
+                  <button
+                    type="button"
+                    className={`audio-tab ${audioMode === 'original' ? 'active' : ''}`}
+                    onClick={() => setAudioMode('original')}
+                  >
+                    Original-Ton
+                  </button>
+                </div>
+
+                <audio
+                  key={activeAudioUrl}
+                  className="audio-player-element"
+                  controls
+                  preload="metadata"
+                  src={activeAudioUrl}
+                />
+                <p className="audio-hint">
+                  {audioMode === 'stereo' &&
+                    'Links: Original-Ton aus Video/Audio · Rechts: Synthese exakt nach generiertem Notenblatt.'}
+                  {audioMode === 'synth' &&
+                    'Spielt ausschließlich die erkannten Diskant-Noten + Helikon-Bässe des Notenblatts.'}
+                  {audioMode === 'original' &&
+                    'Die per FFmpeg aus der Quell-Datei extrahierte 22.05 kHz Mono-Audiospur.'}
+                </p>
+              </>
+            ) : (
+              <div className="empty-panel-placeholder">
+                <div className="empty-audio-box">
+                  <span className="empty-audio-kicker">3-Kanal Audio-Verifikation</span>
+                  <p className="empty-audio-text">
+                    Nach der Transkription stehen hier <strong>Stereo-Diff (L/R)</strong>, der{' '}
+                    <strong>synthetisierte Harmonika-Notensatz</strong> und das{' '}
+                    <strong>Original-Audio</strong> zum direkten Gehörabgleich bereit.
+                  </p>
                 </div>
               </div>
-
-              <div className="audio-tabs" role="tablist">
-                <button
-                  type="button"
-                  className={`audio-tab ${audioMode === 'stereo' ? 'active' : ''}`}
-                  onClick={() => setAudioMode('stereo')}
-                >
-                  Stereo-Diff (L/R)
-                </button>
-                <button
-                  type="button"
-                  className={`audio-tab ${audioMode === 'synth' ? 'active' : ''}`}
-                  onClick={() => setAudioMode('synth')}
-                >
-                  Nur Notenblatt
-                </button>
-                <button
-                  type="button"
-                  className={`audio-tab ${audioMode === 'original' ? 'active' : ''}`}
-                  onClick={() => setAudioMode('original')}
-                >
-                  Original-Ton
-                </button>
-              </div>
-
-              <audio
-                key={activeAudioUrl}
-                className="audio-player-element"
-                controls
-                preload="metadata"
-                src={activeAudioUrl}
-              />
-              <p className="audio-hint">
-                {audioMode === 'stereo' &&
-                  'Links: Original-Ton aus Video/Audio · Rechts: Synthese exakt nach generiertem Notenblatt.'}
-                {audioMode === 'synth' &&
-                  'Spielt ausschließlich die erkannten Diskant-Noten + Helikon-Bässe des Notenblatts.'}
-                {audioMode === 'original' &&
-                  'Die per FFmpeg aus der Quell-Datei extrahierte 22.05 kHz Mono-Audiospur.'}
-              </p>
-            </section>
-          )}
+            )}
+          </section>
 
           {/* [04] Kurz-Legende für Nicht-Musiker */}
           <section className="panel-section">
@@ -378,12 +420,14 @@ export default function App() {
                 className={`mode-btn ${viewMode === 'sheet' ? 'active' : ''}`}
                 onClick={() => setViewMode('sheet')}
               >
-                Noten &amp; Griffschrift ({result?.pages.length ?? 0} Seiten)
+                Noten &amp; Griffschrift {result ? `(${result.pages.length} Seiten)` : '(0 Seiten)'}
               </button>
               <button
                 type="button"
                 className={`mode-btn ${viewMode === 'pdf' ? 'active' : ''}`}
                 onClick={() => setViewMode('pdf')}
+                disabled={!result}
+                title={!result ? 'Erst nach Upload und Notenübersetzung verfügbar' : undefined}
               >
                 Original PDF-Ansicht
               </button>
@@ -433,10 +477,63 @@ export default function App() {
             )}
 
             {!result && !isLoading && !errorMsg && (
-              <div className="status-callout">
-                <strong>BEREIT FÜR DATEI-UPLOAD:</strong> Wähle links eine Audio- oder Videodatei
-                aus und starte die Übersetzung, um Normalnoten + Griffschrift (System Max Rosenzopf)
-                als DIN-A4 Druckbogen zu erzeugen.
+              <div className="empty-stage-canvas">
+                <div className="empty-blueprint-sheet">
+                  <div className="blueprint-corner top-left">+</div>
+                  <div className="blueprint-corner top-right">+</div>
+                  <div className="blueprint-corner bottom-left">+</div>
+                  <div className="blueprint-corner bottom-right">+</div>
+
+                  <div className="blueprint-header">
+                    <span className="blueprint-tag">DIN A4 DRUCKBOGEN · 210 × 297 MM · 300 DPI</span>
+                    <span className="blueprint-id">NOTENPULT-WERKBANK</span>
+                  </div>
+
+                  <div className="blueprint-body">
+                    <h3 className="blueprint-title">Noch kein Notenstich geladen</h3>
+                    <p className="blueprint-lead">
+                      Wähle in der linken Seitenleiste eine Audio- oder Videodatei aus, um die
+                      automatische Übersetzung in Normalnoten und spielbare Griffschrift (System Max
+                      Rosenzopf) zu starten.
+                    </p>
+
+                    <div className="blueprint-workflow-grid">
+                      <div className="blueprint-step">
+                        <span className="step-num">01</span>
+                        <strong>Medien-Ingest</strong>
+                        <p>FFmpeg extrahiert bei Videos automatisch eine 22.05 kHz Mono-WAV-Spur.</p>
+                      </div>
+                      <div className="blueprint-step">
+                        <span className="step-num">02</span>
+                        <strong>KI-Transkription</strong>
+                        <p>Beat-This, MuScriptor, CRNN &amp; Basic Pitch ermitteln Takte &amp; Noten.</p>
+                      </div>
+                      <div className="blueprint-step">
+                        <span className="step-num">03</span>
+                        <strong>Rosenzopf-Viterbi</strong>
+                        <p>DAG berechnet globale Druck/Zug-Balgrichtung (Handspanne ≤ 5 Knöpfe).</p>
+                      </div>
+                      <div className="blueprint-step">
+                        <span className="step-num">04</span>
+                        <strong>Druckfertiges PDF</strong>
+                        <p>Verovio graviert Noten + Griffschrift mit durchgehendem Druckbalken.</p>
+                      </div>
+                    </div>
+
+                    <div className="blueprint-cta-row">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        Datei auswählen
+                      </button>
+                      <span className="blueprint-cta-hint">
+                        Unterstützt MP4, MOV, WEBM, WAV, MP3, M4A, FLAC
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
