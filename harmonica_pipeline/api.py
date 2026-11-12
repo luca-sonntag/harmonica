@@ -186,5 +186,16 @@ def serve_output_file(file_path: str, download: bool = False):
 
 
 WEB_DIST_DIR = ROOT_DIR / "web" / "dist"
+
+@app.get("/favicon.ico", include_in_schema=False)
+def get_favicon_ico():
+    target = WEB_DIST_DIR / "favicon.ico"
+    if target.exists():
+        return FileResponse(str(target), media_type="image/x-icon")
+    alt = ROOT_DIR / "web" / "public" / "favicon.ico"
+    if alt.exists():
+        return FileResponse(str(alt), media_type="image/x-icon")
+    raise HTTPException(status_code=404)
+
 if WEB_DIST_DIR.exists():
     app.mount("/", StaticFiles(directory=str(WEB_DIST_DIR), html=True), name="web_ui")
