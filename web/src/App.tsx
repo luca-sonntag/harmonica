@@ -85,7 +85,7 @@ export default function App() {
   const [pageFilter, setPageFilter] = useState<PageDisplayFilter>('all');
   const [zoomed, setZoomed] = useState<boolean>(false);
   const [audioMode, setAudioMode] = useState<AudioTrackMode>('stereo');
-  const [gpuLabel, setGpuLabel] = useState<string>('CUDA / Verovio Ready');
+  const [systemReadyLabel] = useState<string>('Notensatz bereit (Stimmung G-C-F-B)');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const logsEndRef = useRef<HTMLDivElement | null>(null);
@@ -93,15 +93,6 @@ export default function App() {
   const pollIntervalRef = useRef<any>(null);
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.gpu) {
-          setGpuLabel(`${d.gpu} · FFmpeg ${d.ffmpeg_available ? 'Aktiv' : 'Inaktiv'}`);
-        }
-      })
-      .catch(() => {});
-
     return () => {
       cleanupStreams();
     };
@@ -251,17 +242,17 @@ export default function App() {
       <header className="masthead">
         <div className="masthead-top">
           <span className="masthead-kicker">
-            Notenstich-Werkbank · Steirische Harmonika (Stimmung G-C-F-B · System Max Rosenzopf)
+            Notenwerkbank · Steirische Harmonika (Stimmung G-C-F-B · System Max Rosenzopf)
           </span>
           <span className="masthead-status">
             <span className="status-dot" />
-            {gpuLabel}
+            {systemReadyLabel}
           </span>
         </div>
         <div className="masthead-title-row">
           <h1 className="masthead-title">Normalnoten &amp; Griffschrift</h1>
           <p className="masthead-subtitle">
-            Video-/Audio-Ingest → Beat-Tracking → KI-Transkription → Viterbi-Balg-Optimierer → DIN-A4 Druckbogen
+            Vom Klang zum Notenblatt: Aufnahme einspeisen → Melodie &amp; Bässe erkennen → Optimale Balgführung → Spielfertiges Notenblatt
           </p>
         </div>
       </header>
@@ -274,7 +265,7 @@ export default function App() {
             <div className="section-header">
               <div>
                 <span className="section-index">[01] Quelle einspeisen</span>
-                <h2 className="section-heading">Audio- oder Videodatei</h2>
+                <h2 className="section-heading">Audio- oder Videoaufnahme</h2>
               </div>
             </div>
 
@@ -294,14 +285,14 @@ export default function App() {
                 }}
               >
                 <div className="dropzone-formats">
-                  Video (.MP4, .MOV, .WEBM) · Audio (.WAV, .MP3, .M4A, .FLAC)
+                  Video (.MP4, .MOV) · Audio (.WAV, .MP3, .M4A)
                 </div>
                 <div className="dropzone-main">
-                  Datei hier ablegen oder antippen zum Auswählen
+                  Aufnahme hier ablegen oder antippen zum Auswählen
                 </div>
                 <p className="dropzone-hint">
-                  Bei Videodateien extrahiert die Pipeline automatisch die Audiospur (22.05 kHz Mono WAV)
-                  und einen Referenz-Keyframe vor der Notenübersetzung.
+                  Nimm eine Video- oder Tonaufnahme deines Stücks (z. B. Handy-Aufnahme oder MP3).
+                  Das Notenblatt wird automatisch daraus erstellt.
                 </p>
                 <input
                   ref={fileInputRef}
@@ -315,7 +306,7 @@ export default function App() {
               {selectedFile && (
                 <div className="file-selected-banner">
                   <span>
-                    <strong>Gewählt:</strong> {selectedFile.name} (
+                    <strong>Ausgewählt:</strong> {selectedFile.name} (
                     {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
                   </span>
                 </div>
@@ -343,8 +334,8 @@ export default function App() {
                   disabled={!selectedFile || isLoading}
                 >
                   {isLoading
-                    ? `Pipeline rechnet (${activeJob?.progress_percent ?? 0}%)…`
-                    : 'In Noten + Griffschrift übersetzen'}
+                    ? `Notenblatt wird erstellt (${activeJob?.progress_percent ?? 0}%)…`
+                    : 'Noten & Griffschrift erstellen'}
                 </button>
               </div>
             </form>
@@ -356,7 +347,7 @@ export default function App() {
               <div className="section-header">
                 <div>
                   <span className="section-index">[02] Werkblatt-Protokoll</span>
-                  <h2 className="section-heading">Konvertierung &amp; Analyse</h2>
+                  <h2 className="section-heading">Stück &amp; Balgführung</h2>
                 </div>
               </div>
 
@@ -366,11 +357,11 @@ export default function App() {
                     <div className="video-preview-frame">
                       <img
                         src={result.video_frame_url}
-                        alt="Extrahierter Video-Frame der Harmonika-Aufnahme"
+                        alt="Standbild der Harmonika-Aufnahme"
                       />
                       <div className="video-frame-caption">
-                        <span>QUELLE: {result.original_filename}</span>
-                        <span>VIDEO → AUDIO</span>
+                        <span>AUFNAHME: {result.original_filename}</span>
+                        <span>{result.media_kind === 'VIDEO' ? 'VIDEO' : 'AUDIO'}</span>
                       </div>
                     </div>
                   )}
@@ -378,35 +369,32 @@ export default function App() {
                   <table className="spec-table">
                     <tbody>
                       <tr>
-                        <th>Eingang</th>
-                        <td>
-                          {result.media_kind}: {result.original_filename}
-                        </td>
+                        <th>Aufnahme</th>
+                        <td>{result.original_filename}</td>
                       </tr>
                       <tr>
-                        <th>Medien-Pipeline</th>
+                        <th>Format</th>
                         <td>{result.conversion_step}</td>
                       </tr>
                       <tr>
-                        <th>Laufzeit / Takt</th>
+                        <th>Spieldauer &amp; Takt</th>
                         <td>
-                          {result.duration_s.toFixed(1)} s · {result.time_signature} ({result.measures_count}{' '}
-                          Takte)
+                          {result.duration_s.toFixed(1)} s · {result.time_signature} ({result.measures_count} Takte)
                         </td>
                       </tr>
                       <tr>
-                        <th>Balgrichtung</th>
+                        <th>Balgführung</th>
                         <td>
-                          {result.druck_measures} Takte DRUCK · {result.zug_measures} Takte ZUG
+                          {result.druck_measures} Takte Druck · {result.zug_measures} Takte Zug
                         </td>
                       </tr>
                       <tr>
-                        <th>Aktive Reihen</th>
+                        <th>Verwendete Reihen</th>
                         <td>{result.rows_used.join(' / ')}</td>
                       </tr>
                       <tr>
-                        <th>Rechenzeit</th>
-                        <td>{result.processing_time_s.toFixed(1)}s (8 Stufen abgeschlossen)</td>
+                        <th>Erstellt in</th>
+                        <td>{result.processing_time_s.toFixed(1)} Sekunden</td>
                       </tr>
                     </tbody>
                   </table>
@@ -416,7 +404,7 @@ export default function App() {
                   <table className="spec-table">
                     <tbody>
                       <tr>
-                        <th>Eingang</th>
+                        <th>Aufnahme</th>
                         <td>{activeJob.filename}</td>
                       </tr>
                       <tr>
@@ -430,11 +418,11 @@ export default function App() {
                         </td>
                       </tr>
                       <tr>
-                        <th>Aktive Stufe</th>
-                        <td>[{activeJob.current_stage_id}] {activeJob.current_stage_label}</td>
+                        <th>Aktueller Schritt</th>
+                        <td>{activeJob.current_stage_label}</td>
                       </tr>
                       <tr>
-                        <th>Laufzeit</th>
+                        <th>Dauer</th>
                         <td>{formatSeconds(activeJob.elapsed_s)}</td>
                       </tr>
                     </tbody>
@@ -450,7 +438,7 @@ export default function App() {
               <div className="section-header">
                 <div>
                   <span className="section-index">[03] Hörprobe</span>
-                  <h2 className="section-heading">Akustischer Noten-Abgleich</h2>
+                  <h2 className="section-heading">Akustischer Gehörabgleich</h2>
                 </div>
               </div>
 
@@ -460,21 +448,21 @@ export default function App() {
                   className={`audio-tab ${audioMode === 'stereo' ? 'active' : ''}`}
                   onClick={() => setAudioMode('stereo')}
                 >
-                  Stereo-Diff (L/R)
+                  Gehörvergleich (L/R)
                 </button>
                 <button
                   type="button"
                   className={`audio-tab ${audioMode === 'synth' ? 'active' : ''}`}
                   onClick={() => setAudioMode('synth')}
                 >
-                  Nur Notenblatt
+                  Nur Notensatz
                 </button>
                 <button
                   type="button"
                   className={`audio-tab ${audioMode === 'original' ? 'active' : ''}`}
                   onClick={() => setAudioMode('original')}
                 >
-                  Original-Ton
+                  Originalaufnahme
                 </button>
               </div>
 
@@ -487,11 +475,11 @@ export default function App() {
               />
               <p className="audio-hint">
                 {audioMode === 'stereo' &&
-                  'Links: Original-Ton aus Video/Audio · Rechts: Synthese exakt nach generiertem Notenblatt.'}
+                  'Links: Deine Originalaufnahme · Rechts: Klang exakt nach dem erstellten Notenblatt.'}
                 {audioMode === 'synth' &&
-                  'Spielt ausschließlich die erkannten Diskant-Noten + Helikon-Bässe des Notenblatts.'}
+                  'Spielt ausschließlich die Melodie und Begleitbässe des erzeugten Notenblatts.'}
                 {audioMode === 'original' &&
-                  'Die per FFmpeg aus der Quell-Datei extrahierte 22.05 kHz Mono-Audiospur.'}
+                  'Die Tonspur deiner hochgeladenen Aufnahme.'}
               </p>
             </section>
           )}
@@ -502,25 +490,25 @@ export default function App() {
               <div className="section-header">
                 <div>
                   <span className="section-index">[04] Lesehilfe</span>
-                  <h2 className="section-heading">Griffschrift-Codierung</h2>
+                  <h2 className="section-heading">Griffschrift nach Max Rosenzopf</h2>
                 </div>
               </div>
               <div className="legend-grid">
                 <div className="legend-item">
-                  <span className="legend-symbol">● Runder Kopf</span>
-                  <span className="legend-desc">1. Reihe (Raum) oder 2. Reihe (Linie)</span>
+                  <span className="legend-symbol">● Runder Notenkopf</span>
+                  <span className="legend-desc">1. oder 2. Reihe (Grundtonart)</span>
                 </div>
                 <div className="legend-item">
-                  <span className="legend-symbol">× Kreuz-Kopf</span>
-                  <span className="legend-desc">3. Reihe (Raum) oder 4. Reihe (Linie)</span>
+                  <span className="legend-symbol">× Kreuz-Notenkopf</span>
+                  <span className="legend-desc">3. oder 4. Reihe (Trio/Nebentonarten)</span>
                 </div>
                 <div className="legend-item">
                   <span className="legend-symbol">▬ Druckbalken</span>
-                  <span className="legend-desc">Balg zusammendrücken (ohne Balken = Zug)</span>
+                  <span className="legend-desc">Balg zusammendrücken (ohne Balken = Balg auf Zug)</span>
                 </div>
                 <div className="legend-item">
                   <span className="legend-symbol">B b / C c</span>
-                  <span className="legend-desc">Grund- &amp; Akkordbass (2. bzw. 3. Reihe)</span>
+                  <span className="legend-desc">Grundbass &amp; Begleitakkord (2. bzw. 3. Reihe)</span>
                 </div>
               </div>
             </section>
@@ -547,7 +535,7 @@ export default function App() {
                       className={`mode-btn ${viewMode === 'pdf' ? 'active' : ''}`}
                       onClick={() => setViewMode('pdf')}
                     >
-                      Original PDF-Ansicht
+                      Notenblatt als PDF
                     </button>
                   </>
                 )}
@@ -557,7 +545,7 @@ export default function App() {
                     className={`mode-btn ${viewMode === 'progress' ? 'active' : ''}`}
                     onClick={() => setViewMode('progress')}
                   >
-                    Pipeline-Protokoll {isLoading ? `(${activeJob.progress_percent}%)` : '✓'}
+                    Schritt-für-Schritt Verlauf {isLoading ? `(${activeJob.progress_percent}%)` : '✓'}
                   </button>
                 )}
               </div>
@@ -569,7 +557,7 @@ export default function App() {
                     className={`mode-btn ${zoomed ? 'active' : ''}`}
                     onClick={() => setZoomed(!zoomed)}
                   >
-                    {zoomed ? '100% Druckansicht' : 'Vergrößern (+)'}
+                    {zoomed ? 'Normalansicht' : 'Vergrößern (+)'}
                   </button>
                   <a
                     className="btn btn-secondary"
@@ -577,14 +565,14 @@ export default function App() {
                     download={`${result.job_id}_Normalnoten_Griffschrift.musicxml`}
                     style={{ backgroundColor: 'var(--bg-sheet)', color: 'var(--ink)' }}
                   >
-                    MusicXML (.xml)
+                    Notendatei (.musicxml)
                   </a>
                   <a
                     className="btn btn-copper"
                     href={`${result.pdf_url}?download=true`}
                     download={`${result.job_id}_Normalnoten_Griffschrift_A4.pdf`}
                   >
-                    DIN-A4 PDF Herunterladen
+                    DIN-A4 Noten drucken (PDF)
                   </a>
                 </div>
               )}
@@ -594,7 +582,7 @@ export default function App() {
           <div className="stage-viewport">
             {errorMsg && (
               <div className="status-callout error">
-                <strong>FEHLER:</strong> {errorMsg}
+                <strong>HINWEIS:</strong> {errorMsg}
               </div>
             )}
 
@@ -605,7 +593,7 @@ export default function App() {
                 <div className="progress-board-header">
                   <div>
                     <span className="progress-kicker">
-                      [ECHTZEIT-PROTOKOLL · AUFTRAG #{activeJob.job_id}]
+                      [NOTENSATZ IN ARBEIT · AUFTRAG #{activeJob.job_id}]
                     </span>
                     <h2 className="progress-board-title">{activeJob.filename}</h2>
                     <p className="progress-board-subtitle">
@@ -641,14 +629,14 @@ export default function App() {
                   </div>
                   <div className="progress-gauge-meta">
                     <span className="gauge-stage-tag">
-                      STUFE {activeJob.stages.findIndex((s) => s.id === activeJob.current_stage_id) + 1} VON 8
+                      SCHRITT {activeJob.stages.findIndex((s) => s.id === activeJob.current_stage_id) + 1} VON 8
                     </span>
                     <span className="gauge-state-badge">
                       {activeJob.status === 'completed'
-                        ? '✓ ALLE STUFEN ERFOLGREICH'
+                        ? '✓ NOTENBLATT FERTIG'
                         : activeJob.status === 'failed'
                           ? '✕ ABGEBROCHEN'
-                          : '● RECHENPROZESS LÄUFT'}
+                          : '● WIRD ERSTELLT'}
                     </span>
                   </div>
                 </div>
@@ -691,7 +679,7 @@ export default function App() {
                           )}
                           {isFail && (
                             <span className="stage-badge badge-failed">
-                              ✕ FEHLER
+                              ✕ HINWEIS
                             </span>
                           )}
                           {stage.status === 'pending' && (
@@ -713,26 +701,26 @@ export default function App() {
                       className="btn btn-primary"
                       onClick={() => setViewMode('sheet')}
                     >
-                      Zum Notenstich wechseln ({result.pages.length} Seiten DIN A4) →
+                      Zum Notenblatt wechseln ({result.pages.length} Seiten) →
                     </button>
                     <a
                       className="btn btn-copper"
                       href={`${result.pdf_url}?download=true`}
                       download={`${result.job_id}_Normalnoten_Griffschrift_A4.pdf`}
                     >
-                      Druck-PDF herunterladen
+                      Notenblatt drucken (PDF)
                     </a>
                   </div>
                 )}
 
-                {/* Monospace Telemetry Terminal */}
+                {/* Monospace Log View */}
                 <div className="telemetry-terminal-box">
                   <div className="telemetry-terminal-bar">
                     <span className="terminal-title">
-                      WERKSTATT-TELEMETRIE &amp; LOGS ({activeJob.logs.length} EINTRÄGE)
+                      SCHRITT-FÜR-SCHRITT VERLAUF ({activeJob.logs.length} EINTRÄGE)
                     </span>
                     <span className="terminal-indicator">
-                      {activeJob.status === 'running' ? '● STREAM AKTIV' : 'IDLE'}
+                      {activeJob.status === 'running' ? '● AKTIV' : 'BEREIT'}
                     </span>
                   </div>
                   <div className="telemetry-terminal-viewport">
@@ -771,25 +759,23 @@ export default function App() {
                   <div className="blueprint-corner bottom-right">+</div>
 
                   <div className="blueprint-header">
-                    <span className="blueprint-tag">DIN A4 DRUCKBOGEN · STIMMUNG G-C-F-B</span>
+                    <span className="blueprint-tag">DIN A4 NOTENBOGEN · STIMMUNG G-C-F-B</span>
                     <span className="blueprint-id">SYSTEM MAX ROSENZOPF</span>
                   </div>
 
                   <div className="blueprint-body empty-focused-body">
-                    <h3 className="blueprint-title">Audio- oder Videodatei ablegen</h3>
+                    <h3 className="blueprint-title">Musikaufnahme hier ablegen</h3>
                     <p className="blueprint-lead">
-                      Ziehe eine Harmonika-Aufnahme hierher oder wähle links eine Datei aus, um
-                      die automatische Übersetzung in Normalnoten und Griffschrift zu starten.
+                      Ziehe eine Video- oder Tonaufnahme deines Stücks hierher oder wähle links eine Datei aus, um
+                      automatisch Normalnoten und spielbare Griffschrift zu erstellen.
                     </p>
 
                     <div className="empty-format-pills">
                       <span className="format-pill">MP4</span>
                       <span className="format-pill">MOV</span>
-                      <span className="format-pill">WEBM</span>
                       <span className="format-pill">WAV</span>
                       <span className="format-pill">MP3</span>
                       <span className="format-pill">M4A</span>
-                      <span className="format-pill">FLAC</span>
                     </div>
 
                     <div className="blueprint-cta-row">
@@ -801,10 +787,10 @@ export default function App() {
                           fileInputRef.current?.click();
                         }}
                       >
-                        Datei auswählen
+                        Aufnahme auswählen
                       </button>
                       <span className="blueprint-cta-hint">
-                        FFmpeg extrahiert bei Videos automatisch 22.05 kHz Mono-Audio
+                        Unterstützt Video- und Tonaufnahmen (Handy, MP3, WAV)
                       </span>
                     </div>
                   </div>
@@ -817,7 +803,7 @@ export default function App() {
               <>
                 <div className="page-switcher-bar">
                   <span>
-                    <strong>WERK:</strong> {result.title}
+                    <strong>STÜCK:</strong> {result.title}
                   </span>
                   <div className="page-pill-group">
                     <button
@@ -848,7 +834,7 @@ export default function App() {
                     >
                       <div className="sheet-page-header">
                         <span>{page.caption}</span>
-                        <span>DIN A4 · 300 DPI · VEROVIO + ROSENZOPF-STICH</span>
+                        <span>DIN A4 · STIMMUNG G-C-F-B · SYSTEM ROSENZOPF</span>
                       </div>
                       <img
                         className="sheet-page-image"
@@ -868,7 +854,7 @@ export default function App() {
                 <iframe
                   className="pdf-iframe"
                   src={`${result.pdf_url}#toolbar=1&navpanes=0&scrollbar=1`}
-                  title="DIN-A4 Druck-PDF"
+                  title="DIN-A4 Notenblatt als PDF"
                 />
               </div>
             )}
@@ -878,10 +864,10 @@ export default function App() {
 
       <footer className="footer-spec">
         <div className="footer-row">
-          <span>Stimmung: G-C-F-B (4-reihig, 46 Knöpfe)</span>
-          <span>Griffschrift-Standard: System Max Rosenzopf (1975)</span>
-          <span>Dual-System: Normalnoten (Violin) + Rosenzopf Griffschrift (&lt;fifths&gt;0&lt;/fifths&gt;)</span>
-          <span>Viterbi DAG · Balgwechsel-Kosten · Handspanne ≤ 5</span>
+          <span>Harmonika-Stimmung: G-C-F-B (4-reihig)</span>
+          <span>Griffschrift: System Max Rosenzopf</span>
+          <span>Notensatz: Zweizeilig (Normalnoten oben, Griffschrift unten mit durchgehendem Druckbalken)</span>
+          <span>Balgführung: Minimierte Balgwechsel · Spielbare Handspanne</span>
         </div>
       </footer>
     </div>

@@ -27,50 +27,50 @@ STAGE_DEFINITIONS = [
     {
         "id": "ingest",
         "step": "01",
-        "title": "Medien-Ingest & Audioextraktion",
-        "description": "FFmpeg analysiert Container, extrahiert 22.05 kHz Mono-Audio und Referenzframe",
+        "title": "Aufnahme aufbereiten",
+        "description": "Tonspur der Aufnahme für die Notenerkennung bereinigen",
     },
     {
         "id": "beat",
         "step": "02",
-        "title": "Beat-This Takt- & Tempofindung",
-        "description": "JKU Beat-This identifiziert Downbeats & Taktschablone (2/4 Polka)",
+        "title": "Takt & Tempo bestimmen",
+        "description": "Taktstriche und Spieltempo des Musikstücks erfassen",
     },
     {
         "id": "transcribe",
         "step": "03",
-        "title": "Polyphone KI-Transkription (Ensemble)",
-        "description": "MuScriptor + ByteDance CRNN + Spotify Basic Pitch Multi-Modell-Ensemble",
+        "title": "Melodie & Bässe heraushören",
+        "description": "Harmonika-Diskant und Begleitbässe erfassen",
     },
     {
         "id": "skyline",
         "step": "04",
-        "title": "Skyline-Melodie & Helikonbass-Filter",
-        "description": "Filtert Tremolo-Schwebungen & koppelt Melodieführung mit Begleitbässen",
+        "title": "Melodieführung & Helikonbässe filtern",
+        "description": "Hauptmelodie hervorheben und Schwebungen der Stimmzungen glätten",
     },
     {
         "id": "viterbi",
         "step": "05",
-        "title": "Rosenzopf Viterbi-Balg-Optimierer",
-        "description": "Löst Dynamic Programming DAG über G-C-F-B Knopfmatrix & minimiert Balgwechsel",
+        "title": "Balgführung & Fingersatz optimieren",
+        "description": "Bequeme Druck- und Zugwechsel sowie handgerechte Griffkombinationen wählen",
     },
     {
         "id": "musicxml",
         "step": "06",
-        "title": "Dual-System Partitur-Generierung",
-        "description": "Kompiliert zweizeilige MusicXML: Normalnoten oben, Rosenzopf Griffschrift unten",
+        "title": "Normalnoten & Griffschrift notieren",
+        "description": "Zweizeiligen Notensatz erstellen: Normalnoten oben, Rosenzopf-Griffschrift unten",
     },
     {
         "id": "verovio",
         "step": "07",
-        "title": "Verovio Notenstich & DIN A4 PDF",
-        "description": "C++ Gravur der Druckseiten mit Bravura-Musikschrift & 300 DPI Vektorexport",
+        "title": "Druckfertiges Notenblatt setzen",
+        "description": "Sauberes Notenbild mit durchgehendem Druckbalken für DIN-A4-Ausdruck erstellen",
     },
     {
         "id": "audio_diff",
         "step": "08",
-        "title": "Akustische Verifikation & Stereo-Diff",
-        "description": "Synthetisiert Griffschrift und generiert Stereo-A/B-Vergleichsspur (Links/Rechts)",
+        "title": "Klangabgleich vorbereiten",
+        "description": "Akustische Hörprobe zum direkten Gehörabgleich mit der Originalaufnahme bereitstellen",
     },
 ]
 
@@ -309,17 +309,17 @@ def run_pipeline_job(
         # -------------------------------------------------------------
         # STAGE 01: Ingest & Media Normalization
         # -------------------------------------------------------------
-        job.start_stage("ingest", "FFmpeg analysiert Container und Audio-Streams...")
-        job.log(f"Analysiere Mediendatei: {filename}", "info")
+        job.start_stage("ingest", "Aufnahme wird für die Notenerkennung aufbereitet...")
+        job.log(f"Aufnahme geladen: '{filename}'", "info")
         job.set_progress(4)
 
         ingested = ingest_media_file(raw_upload_path, filename, job.job_dir)
         job.complete_stage(
             "ingest",
-            f"{ingested.media_kind} ingestiert: {ingested.duration_s:.1f}s Audio, 22.05 kHz Mono",
+            f"Tonspur bereit ({ingested.duration_s:.1f}s Spielzeit)",
         )
         job.log(
-            f"Medien-Ingest: {ingested.media_kind} bereit ({ingested.duration_s:.1f}s)",
+            f"Tonspur aufbereitet: {ingested.duration_s:.1f}s Spielzeit",
             "info",
         )
         job.set_progress(12)
@@ -330,7 +330,7 @@ def run_pipeline_job(
         )
 
         # -------------------------------------------------------------
-        # STAGE 02 & 03: Beat-This & Multi-Model AI Transcription
+        # STAGE 02 & 03: Beat & Multi-Model AI Transcription
         # -------------------------------------------------------------
         cache_path = job.job_dir / "transcription_cache.json"
         full_ref_cache = outputs_dir / "06_full_transcription_cache.json"
@@ -340,10 +340,10 @@ def run_pipeline_job(
             and abs(ingested.duration_s - 105.51) < 0.45
         ):
             shutil.copyfile(full_ref_cache, cache_path)
-            job.log("Verwende vorberechneten Referenz-Cache für Audio-Muster", "info")
+            job.log("Vorberechnetes Notenblatt für Referenzaufnahme geladen", "info")
 
-        job.start_stage("beat", "JKU Linz Beat-This analysiert Downbeats & Taktstriche...")
-        job.log("Starte Beat-This Neural Beat Tracker...", "info")
+        job.start_stage("beat", "Ermittle Taktart, Taktstriche und Spieltempo...")
+        job.log("Ermittle Taktstriche und Spieltempo...", "info")
         job.set_progress(16)
 
         def progress_callback(substage: str, pct_fraction: float, msg: str):
@@ -355,7 +355,7 @@ def run_pipeline_job(
                 job.log(msg, "info")
                 job.start_stage(
                     "transcribe",
-                    "Starte polyphones KI-Modell-Ensemble (MuScriptor + CRNN + Basic Pitch)...",
+                    "Erfasse Diskant-Melodie und Begleitbässe...",
                 )
             elif substage.startswith("beat_"):
                 job.update_stage_detail("beat", msg)
@@ -378,9 +378,9 @@ def run_pipeline_job(
 
         job.complete_stage(
             "transcribe",
-            f"Ensemble abgeschlossen: {len(tx_data['bp_diskant']) + len(tx_data['mu_diskant'])} Notenkandidaten",
+            "Melodie und Begleitung erfolgreich erfasst",
         )
-        job.log("Polyphone KI-Transkription erfolgreich abgeschlossen", "info")
+        job.log("Melodie- und Bassnoten erfasst", "info")
         job.set_progress(68)
 
         # -------------------------------------------------------------
@@ -388,9 +388,9 @@ def run_pipeline_job(
         # -------------------------------------------------------------
         job.start_stage(
             "skyline",
-            "Skyline-Algorithmus glättet Tremolo-Schwebungen & filtert Obertöne...",
+            "Hauptmelodie hervorheben und Schwebungen der Stimmzungen glätten...",
         )
-        job.log("Filtere Tremolo-Schwebungen und Obertöne mit Skyline-Algorithmus...", "info")
+        job.log("Hauptmelodie hervorheben und Tremolo-Schwebungen glätten...", "info")
         job.set_progress(72)
 
         combined_bass = tx_data["bp_bass"] + tx_data["pti_bass"] + tx_data["mu_bass"]
@@ -410,22 +410,22 @@ def run_pipeline_job(
         max_m = max((ev["measure"] for ev in events), default=1)
         job.complete_stage(
             "skyline",
-            f"{len(events)} Harmonika-Noten über {max_m} Takte quantisiert",
+            f"{len(events)} Harmonika-Noten über {max_m} Takte eingeteilt",
         )
         job.log(
-            f"Skyline: {len(events)} Noten über {max_m} Takte extrahiert",
+            f"Melodieführung: {len(events)} Noten über {max_m} Takte erfasst",
             "info",
         )
         job.set_progress(78)
 
         # -------------------------------------------------------------
-        # STAGE 05: Rosenzopf Viterbi Bellows Optimizer
+        # STAGE 05: Rosenzopf Bellows & Fingering Optimizer
         # -------------------------------------------------------------
         job.start_stage(
             "viterbi",
-            "Viterbi berechnet Dynamic Programming DAG über Balgrichtung & Handspanne...",
+            "Balgführung optimieren: Bequeme Druck- und Zugwechsel berechnen...",
         )
-        job.log("Löse Dynamic Programming DAG für optimale Balgführung (System Rosenzopf)...", "info")
+        job.log("Optimiere Balgführung für die 4-reihige Harmonika (System Rosenzopf)...", "info")
         job.set_progress(82)
 
         griff_states = viterbi_optimize_griffschrift(events)
@@ -441,22 +441,22 @@ def run_pipeline_job(
 
         job.complete_stage(
             "viterbi",
-            f"Optimiert: {druck_bars} Takte Druck, {zug_bars} Takte Zug (Handspanne <= 5 Knöpfe)",
+            f"Balgführung: {druck_bars} Takte Druck, {zug_bars} Takte Zug (bequeme Handspanne)",
         )
         job.log(
-            f"Viterbi optimiert: {druck_bars} Takte Druck, {zug_bars} Takte Zug",
+            f"Balgführung optimiert: {druck_bars} Takte Druck, {zug_bars} Takte Zug",
             "info",
         )
         job.set_progress(87)
 
         # -------------------------------------------------------------
-        # STAGE 06: Dual-System MusicXML Generation
+        # STAGE 06: Dual-System Score Generation
         # -------------------------------------------------------------
         job.start_stage(
             "musicxml",
-            "MusicXML generieren: System 1 (Normalnoten), System 2 (Rosenzopf Griffschrift)...",
+            "Normalnoten oben und Rosenzopf-Griffschrift unten setzen...",
         )
-        job.log("Generiere zweizeilige Partitur (Normalnoten + Griffschrift Rosenzopf)...", "info")
+        job.log("Zweizeiligen Notensatz (Normalnoten + Griffschrift) erstellen...", "info")
         job.set_progress(89)
 
         xml_str, measure_directions = build_dual_system_musicxml(
@@ -470,19 +470,19 @@ def run_pipeline_job(
 
         job.complete_stage(
             "musicxml",
-            "Zweizeilige Partitur mit Rosenzopf-Mapping & <fifths>0</fifths> generiert",
+            "Zweizeiliger Notensatz mit Griffschrift-Schlüssel erstellt",
         )
-        job.log("MusicXML erfolgreich generiert", "info")
+        job.log("Zweizeiliger Notensatz erstellt", "info")
         job.set_progress(92)
 
         # -------------------------------------------------------------
-        # STAGE 07: Verovio Engraving & DIN A4 PDF
+        # STAGE 07: Engraving & PDF Output
         # -------------------------------------------------------------
         job.start_stage(
             "verovio",
-            "Verovio C++ Lib graviert Druckseiten mit Bravura-Schriftart & 300 DPI...",
+            "Druckfertiges Notenblatt mit durchgehendem Druckbalken zeichnen...",
         )
-        job.log("Starte Verovio Notenstich & DIN A4 PDF-Generierung...", "info")
+        job.log("Notenbild gravieren und Druckseiten erstellen...", "info")
         job.set_progress(94)
 
         pdf_path = job.job_dir / "score_griffschrift_a4.pdf"
@@ -497,9 +497,9 @@ def run_pipeline_job(
 
         job.complete_stage(
             "verovio",
-            f"{len(png_pages)} DIN A4 Druckbogen graviert (300 DPI Vektorgrafik)",
+            f"{len(png_pages)} Notenseiten für DIN-A4-Ausdruck gesetzt",
         )
-        job.log(f"Verovio: {len(png_pages)} DIN A4 Druckseiten erfolgreich gerendert", "info")
+        job.log(f"Notenstich fertiggestellt ({len(png_pages)} Druckseiten)", "info")
         job.set_progress(96)
 
         # -------------------------------------------------------------
@@ -507,9 +507,9 @@ def run_pipeline_job(
         # -------------------------------------------------------------
         job.start_stage(
             "audio_diff",
-            "Synthetisiere Griffschrift & erstelle Stereo-A/B-Kontrollspur...",
+            "Hörprobe für den Gehörabgleich mit dem Original bereitstellen...",
         )
-        job.log("Generiere akustische A/B-Prüfspuren (Links: Original, Rechts: Griffschrift)...", "info")
+        job.log("Hörprobe für den Gehörabgleich erzeugen...", "info")
         job.set_progress(97)
 
         solo_wav = job.job_dir / "synthesized_score_only.wav"
@@ -525,9 +525,9 @@ def run_pipeline_job(
 
         job.complete_stage(
             "audio_diff",
-            "Stereo-A/B Hörprobe & Solo-Synthese erzeugt",
+            "Hörprobe für den Gehörabgleich bereitgestellt",
         )
-        job.log("Akustische Verifikationsspuren erzeugt", "info")
+        job.log("Hörprobe bereitgestellt", "info")
         job.set_progress(99)
 
         # -------------------------------------------------------------

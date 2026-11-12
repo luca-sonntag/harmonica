@@ -141,9 +141,9 @@ def transcribe_full_audio_hybrid(
         f"      -> Audio duration: {duration_s:.2f}s | Device: {device} | Full 4-Model Ensemble (Beat-This + MuScriptor + CRNN + BasicPitch)"
     )
 
-    # 1. JKU Linz Beat-This (Neural Beat & Downbeat Tracker - ~1.4s on CPU, ~0.4s on GPU)
+    # 1. Takt- und Beat-Erkennung
     if progress_cb:
-        progress_cb("beat_start", 0.14, "Beat-This: Starte Takt- und Beat-Erkennung...")
+        progress_cb("beat_start", 0.14, "Ermittle Taktstriche und Rhythmus...")
     t0 = time.perf_counter()
     f2b = File2Beats(checkpoint_path="final0", device=device, dbn=False)
     beats, downbeats = f2b(str(audio_path))
@@ -154,14 +154,14 @@ def transcribe_full_audio_hybrid(
         f"      -> [Beat-This] {len(downbeats_list)} downbeats, {len(beats_list)} beats in {elapsed_beat:.2f}s"
     )
     if progress_cb:
-        progress_cb("beat_done", 0.22, f"Beat-This: {len(downbeats_list)} Downbeats, {len(beats_list)} Beats erkannt ({elapsed_beat:.2f}s)")
+        progress_cb("beat_done", 0.22, f"Taktstruktur erkannt: {len(downbeats_list)} Takte ({elapsed_beat:.1f}s)")
 
-    # 2. Kyutai/Mirelo MuScriptor ('small', constrained to 'organ' + 'tuba', batched with prelude_forcing=False)
+    # 2. Diskant- und Bassstimmen heraushören
     mu_diskant: list[dict] = []
     mu_bass: list[dict] = []
     if include_muscriptor:
         if progress_cb:
-            progress_cb("muscriptor_start", 0.25, "MuScriptor: Lade Transformer-Checkpoint ('organ' + 'tuba')...")
+            progress_cb("muscriptor_start", 0.25, "Erfasse Diskant-Melodie und Begleitbässe...")
         from muscriptor import NoteEndEvent, NoteStartEvent, TranscriptionModel
 
         t0 = time.perf_counter()
@@ -197,15 +197,15 @@ def transcribe_full_audio_hybrid(
             f"      -> [MuScriptor organ+tuba] {len(mu_diskant)} diskant, {len(mu_bass)} bass notes in {elapsed_mu:.2f}s"
         )
         if progress_cb:
-            progress_cb("muscriptor_done", 0.45, f"MuScriptor: {len(mu_diskant)} Diskant- und {len(mu_bass)} Bass-Noten extrahiert ({elapsed_mu:.2f}s)")
+            progress_cb("muscriptor_done", 0.45, f"Melodie- und Bassnoten erfasst ({elapsed_mu:.1f}s)")
 
-    # 3. ByteDance High-Resolution PianoTranscription CRNN
+    # 3. Tastenanschläge und Tondauern präzisieren
     pti_diskant: list[dict] = []
     pti_bass: list[dict] = []
     if include_crnn:
         try:
             if progress_cb:
-                progress_cb("crnn_start", 0.48, "ByteDance CRNN: Analysiere Onset-Wahrscheinlichkeiten...")
+                progress_cb("crnn_start", 0.48, "Tastenanschläge und Tondauern abstimmen...")
             from piano_transcription_inference import PianoTranscription, sample_rate as pti_sr
 
             t0 = time.perf_counter()
@@ -237,13 +237,13 @@ def transcribe_full_audio_hybrid(
                 f"      -> [ByteDance CRNN] {len(pti_diskant)} diskant, {len(pti_bass)} bass notes in {elapsed_pti:.2f}s"
             )
             if progress_cb:
-                progress_cb("crnn_done", 0.58, f"ByteDance CRNN: {len(pti_diskant)} Diskant- und {len(pti_bass)} Bass-Noten extrahiert ({elapsed_pti:.2f}s)")
+                progress_cb("crnn_done", 0.58, f"Tondauern abgestimmt ({elapsed_pti:.1f}s)")
         except ImportError:
             print("      -> [ByteDance CRNN] Not installed in this environment; skipping.")
 
-    # 4. Spotify Basic Pitch (Fast ONNX Runtime ~3.0s on CPU)
+    # 4. Begleitakkorde erfassen
     if progress_cb:
-        progress_cb("bp_start", 0.60, "Basic Pitch: Berechne polyphones Frequenzspektrum...")
+        progress_cb("bp_start", 0.60, "Akkordtöne und Harmonien erfassen...")
     t0 = time.perf_counter()
     tmp_bp_json = cache_path.parent / "tmp_bp_full.json"
     bp_raw = _run_basic_pitch_any(audio_path, tmp_bp_json)
@@ -256,7 +256,7 @@ def transcribe_full_audio_hybrid(
         f"      -> [Basic Pitch] {len(bp_diskant)} diskant, {len(bp_bass)} bass notes in {elapsed_bp:.2f}s"
     )
     if progress_cb:
-        progress_cb("bp_done", 0.68, f"Basic Pitch: {len(bp_diskant)} Diskant- und {len(bp_bass)} Bass-Noten analysiert ({elapsed_bp:.2f}s)")
+        progress_cb("bp_done", 0.68, f"Harmonietöne ermittelt ({elapsed_bp:.1f}s)")
 
     data = {
         "audio_path": str(audio_path),
