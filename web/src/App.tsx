@@ -60,29 +60,7 @@ export default function App() {
         }
       })
       .catch(() => {});
-
-    loadReferenceDemo();
   }, []);
-
-  async function loadReferenceDemo() {
-    setErrorMsg(null);
-    setIsLoading(true);
-    setLoadingStage('Lade 1:45 Referenz-Aufnahme (VID-20240331-WA0007.mp4)…');
-    try {
-      const resp = await fetch('/api/demo');
-      if (!resp.ok) {
-        throw new Error(`Demo-Endpunkt antwortete mit Status ${resp.status}`);
-      }
-      const data: TranscriptionResult = await resp.json();
-      setResult(data);
-      setPageFilter('all');
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Fehler beim Laden der Referenzdaten.');
-    } finally {
-      setIsLoading(false);
-      setLoadingStage('');
-    }
-  }
 
   function handleFilePicked(file: File | undefined) {
     if (!file) return;
@@ -248,14 +226,6 @@ export default function App() {
                   {isLoading
                     ? 'Pipeline rechnet…'
                     : 'In Noten + Griffschrift übersetzen'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={isLoading}
-                  onClick={loadReferenceDemo}
-                >
-                  Referenz-Video laden (1:45 Min · 129 Takte)
                 </button>
               </div>
             </form>
@@ -459,6 +429,14 @@ export default function App() {
             {errorMsg && (
               <div className="status-callout error">
                 <strong>FEHLER:</strong> {errorMsg}
+              </div>
+            )}
+
+            {!result && !isLoading && !errorMsg && (
+              <div className="status-callout">
+                <strong>BEREIT FÜR DATEI-UPLOAD:</strong> Wähle links eine Audio- oder Videodatei
+                aus und starte die Übersetzung, um Normalnoten + Griffschrift (System Max Rosenzopf)
+                als DIN-A4 Druckbogen zu erzeugen.
               </div>
             )}
 
