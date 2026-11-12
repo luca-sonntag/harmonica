@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import time
+import typing
 import urllib.request
 from pathlib import Path
 import librosa
@@ -115,6 +116,7 @@ def transcribe_full_audio_hybrid(
     device: str | None = None,
     force_recompute: bool = False,
     include_muscriptor: bool | None = None,
+    progress_cb: typing.Callable[[str, float, str], None] | None = None,
 ) -> dict:
     """
     Runs (or loads from cache) the Hybrid AI Transcription on `audio_path`.
@@ -122,6 +124,8 @@ def transcribe_full_audio_hybrid(
     """
     if cache_path.exists() and not force_recompute:
         print(f"      -> Loading cached AI transcription from {cache_path}")
+        if progress_cb:
+            progress_cb("cache_hit", 0.65, f"Vorberechnete Transkription geladen ({cache_path.name})")
         return json.loads(cache_path.read_text(encoding="utf-8"))
 
     if device is None:
@@ -138,19 +142,26 @@ def transcribe_full_audio_hybrid(
     )
 
     # 1. JKU Linz Beat-This (Neural Beat & Downbeat Tracker - ~1.4s on CPU, ~0.4s on GPU)
+    if progress_cb:
+        progress_cb("beat_start", 0.14, "Beat-This: Starte Takt- und Beat-Erkennung...")
     t0 = time.perf_counter()
     f2b = File2Beats(checkpoint_path="final0", device=device, dbn=False)
     beats, downbeats = f2b(str(audio_path))
     beats_list = [round(float(b), 4) for b in beats]
     downbeats_list = [round(float(db), 4) for db in downbeats]
+    elapsed_beat = time.perf_counter() - t0
     print(
-        f"      -> [Beat-This] {len(downbeats_list)} downbeats, {len(beats_list)} beats in {time.perf_counter() - t0:.2f}s"
+        f"      -> [Beat-This] {len(downbeats_list)} downbeats, {len(beats_list)} beats in {elapsed_beat:.2f}s"
     )
+    if progress_cb:
+        progress_cb("beat_done", 0.22, f"Beat-This: {len(downbeats_list)} Downbeats, {len(beats_list)} Beats erkannt ({elapsed_beat:.2f}s)")
 
     # 2. Kyutai/Mirelo MuScriptor ('small', constrained to 'organ' + 'tuba', batched with prelude_forcing=False)
     mu_diskant: list[dict] = []
     mu_bass: list[dict] = []
     if include_muscriptor:
+        if progress_cb:
+            progress_cb("muscriptor_start", 0.25, "MuScriptor: Lade Transformer-Checkpoint ('organ' + 'tuba')...")
         from muscriptor import NoteEndEvent, NoteStartEvent, TranscriptionModel
 
         t0 = time.perf_counter()
@@ -181,15 +192,20 @@ def transcribe_full_audio_hybrid(
         mu_merged = apply_tremolo_merge(mu_raw, max_gap_s=0.045)
         mu_diskant = [n for n in mu_merged if 58 <= n["pitch"] <= 92]
         mu_bass = [n for n in mu_merged if n["pitch"] < 58]
+        elapsed_mu = time.perf_counter() - t0
         print(
-            f"      -> [MuScriptor organ+tuba] {len(mu_diskant)} diskant, {len(mu_bass)} bass notes in {time.perf_counter() - t0:.2f}s"
+            f"      -> [MuScriptor organ+tuba] {len(mu_diskant)} diskant, {len(mu_bass)} bass notes in {elapsed_mu:.2f}s"
         )
+        if progress_cb:
+            progress_cb("muscriptor_done", 0.45, f"MuScriptor: {len(mu_diskant)} Diskant- und {len(mu_bass)} Bass-Noten extrahiert ({elapsed_mu:.2f}s)")
 
     # 3. ByteDance High-Resolution PianoTranscription CRNN
     pti_diskant: list[dict] = []
     pti_bass: list[dict] = []
     if include_crnn:
         try:
+            if progress_cb:
+                progress_cb("crnn_start", 0.48, "ByteDance CRNN: Analysiere Onset-Wahrscheinlichkeiten...")
             from piano_transcription_inference import PianoTranscription, sample_rate as pti_sr
 
             t0 = time.perf_counter()
@@ -216,13 +232,18 @@ def transcribe_full_audio_hybrid(
             pti_merged = apply_tremolo_merge(pti_raw, max_gap_s=0.065)
             pti_diskant = [n for n in pti_merged if 58 <= n["pitch"] <= 92]
             pti_bass = [n for n in pti_merged if n["pitch"] < 58]
+            elapsed_pti = time.perf_counter() - t0
             print(
-                f"      -> [ByteDance CRNN] {len(pti_diskant)} diskant, {len(pti_bass)} bass notes in {time.perf_counter() - t0:.2f}s"
+                f"      -> [ByteDance CRNN] {len(pti_diskant)} diskant, {len(pti_bass)} bass notes in {elapsed_pti:.2f}s"
             )
+            if progress_cb:
+                progress_cb("crnn_done", 0.58, f"ByteDance CRNN: {len(pti_diskant)} Diskant- und {len(pti_bass)} Bass-Noten extrahiert ({elapsed_pti:.2f}s)")
         except ImportError:
             print("      -> [ByteDance CRNN] Not installed in this environment; skipping.")
 
     # 4. Spotify Basic Pitch (Fast ONNX Runtime ~3.0s on CPU)
+    if progress_cb:
+        progress_cb("bp_start", 0.60, "Basic Pitch: Berechne polyphones Frequenzspektrum...")
     t0 = time.perf_counter()
     tmp_bp_json = cache_path.parent / "tmp_bp_full.json"
     bp_raw = _run_basic_pitch_any(audio_path, tmp_bp_json)
@@ -230,9 +251,12 @@ def transcribe_full_audio_hybrid(
     bp_merged = apply_tremolo_merge(bp_raw, max_gap_s=0.065)
     bp_diskant = [n for n in bp_merged if 58 <= n["pitch"] <= 92]
     bp_bass = [n for n in bp_merged if n["pitch"] < 58]
+    elapsed_bp = time.perf_counter() - t0
     print(
-        f"      -> [Basic Pitch] {len(bp_diskant)} diskant, {len(bp_bass)} bass notes in {time.perf_counter() - t0:.2f}s"
+        f"      -> [Basic Pitch] {len(bp_diskant)} diskant, {len(bp_bass)} bass notes in {elapsed_bp:.2f}s"
     )
+    if progress_cb:
+        progress_cb("bp_done", 0.68, f"Basic Pitch: {len(bp_diskant)} Diskant- und {len(bp_bass)} Bass-Noten analysiert ({elapsed_bp:.2f}s)")
 
     data = {
         "audio_path": str(audio_path),

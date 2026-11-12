@@ -2,37 +2,38 @@
 FastAPI Backend for the Steirische Harmonika (Normalnoten + Rosenzopf Griffschrift) Pipeline.
 
 Endpoints:
-  - GET  /api/health      : System, GPU & FFmpeg readiness check
-  - POST /api/transcribe  : Accepts Audio (.wav, .mp3, .m4a, .ogg, .flac) or Video (.mp4, .mov, .webm, .mkv),
-                            converts Video -> Audio via FFmpeg, runs the AI + Viterbi Griffschrift pipeline,
-                            and returns sheet music PNG pages + 300-DPI DIN A4 PDF + Audio verification URLs.
-  - GET  /files/{path}    : Serves generated PDFs, SVG/PNG sheet music pages, and WAV files.
+  - GET  /api/health           : System, GPU & FFmpeg readiness check
+  - POST /api/transcribe       : Ingests media, creates asynchronous pipeline job, and returns job status.
+  - GET  /api/jobs/{job_id}    : Returns detailed stage progress, logs, and results.
+  - GET  /api/jobs/{job_id}/stream : Real-time Server-Sent Events (SSE) progress stream.
+  - GET  /files/outputs/{path} : Serves generated PDFs, SVG/PNG sheet music pages, and WAV files.
 """
 
+import asyncio
 import hashlib
-import time
+import json
 from pathlib import Path
+import threading
+import time
 import torch
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .audio_diff import create_audio_verification_files
-from .media_ingest import get_ffmpeg_executable, ingest_media_file
-from .musicxml_io import build_dual_system_musicxml
-from .pdf_renderer import render_musicxml_to_a4_pdf
-from .transcribe import extract_skyline_measures, transcribe_full_audio_hybrid
-from .viterbi import viterbi_optimize_griffschrift
+from .jobs import JobManager, run_pipeline_job
+from .media_ingest import get_ffmpeg_executable
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = ROOT_DIR / "outputs"
 JOBS_DIR = OUTPUTS_DIR / "jobs"
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
+job_manager = JobManager(JOBS_DIR)
+
 app = FastAPI(
     title="Steirische Harmonika – Normalnoten & Griffschrift Werkbank API",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -67,13 +68,13 @@ def health_check() -> dict:
 async def transcribe_uploaded_media(
     file: UploadFile = File(...),
     title: str = Form(""),
+    wait: bool = Query(False),
 ) -> dict:
     """
-    Ingests an uploaded Audio or Video file, converts Video -> Audio via FFmpeg if needed,
-    runs the AI Transcription + Viterbi Griffschrift Optimizer + Verovio DIN A4 PDF Renderer,
-    and returns all URLs and musical metadata.
+    Ingests an uploaded Audio or Video file, creates an asynchronous job tracking
+    all 8 pipeline stages in real-time, and starts processing in the background.
+    If wait=True, blocks until completion and returns the final result.
     """
-    t_start_total = time.perf_counter()
     filename = file.filename or "upload.mp4"
     content = await file.read()
     if not content:
@@ -86,115 +87,89 @@ async def transcribe_uploaded_media(
     raw_upload_path = job_dir / f"source{Path(filename).suffix.lower()}"
     raw_upload_path.write_bytes(content)
 
-    try:
-        ingested = ingest_media_file(raw_upload_path, filename, job_dir)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    job, is_new = job_manager.get_or_create_job(content_hash, filename, title)
 
-    piece_title = title.strip() or f"{Path(filename).stem} – Normalnoten & Griffschrift (G-C-F-B)"
-
-    # Check if the extracted audio matches our pre-computed 105.5s or 30.0s sample to reuse GPU cache
-    cache_path = job_dir / "transcription_cache.json"
-    full_ref_cache = OUTPUTS_DIR / "06_full_transcription_cache.json"
-    if not cache_path.exists() and full_ref_cache.exists() and abs(ingested.duration_s - 105.51) < 0.45:
-        shutil.copyfile(full_ref_cache, cache_path)
-
-    tx_data = transcribe_full_audio_hybrid(
-        ingested.wav_path,
-        cache_path=cache_path,
-        include_muscriptor=True,
-    )
-
-    combined_bass = tx_data["bp_bass"] + tx_data["pti_bass"] + tx_data["mu_bass"]
-    events, reg_dbs = extract_skyline_measures(
-        bp_diskant=tx_data["bp_diskant"],
-        mu_diskant=tx_data["mu_diskant"],
-        pti_diskant=tx_data["pti_diskant"],
-        bass_notes=combined_bass,
-        raw_downbeats_s=tx_data["downbeats_s"],
-        audio_duration_s=tx_data["duration_s"],
-    )
-    if not events:
-        raise HTTPException(
-            status_code=422,
-            detail="Es konnten keine spielbaren Harmonika-Noten in der Aufnahme erkannt werden.",
+    # If the job failed previously or is new, start a fresh worker
+    if is_new or job.status == "failed":
+        if job.status == "failed":
+            job, _ = job_manager.get_or_create_job(
+                content_hash, filename, title, force_new=True
+            )
+        worker = threading.Thread(
+            target=run_pipeline_job,
+            args=(job, raw_upload_path, filename, title, OUTPUTS_DIR),
+            daemon=True,
         )
+        worker.start()
 
-    griff_states = viterbi_optimize_griffschrift(events)
-    max_m = max((ev["measure"] for ev in events), default=1)
-    druck_bars = len({ev["measure"] for ev, gs in zip(events, griff_states) if gs.direction == "DRUCK"})
-    zug_bars = max_m - druck_bars
+    if wait:
+        while job.status in ("queued", "running"):
+            await asyncio.sleep(0.3)
+        if job.status == "failed":
+            raise HTTPException(
+                status_code=422, detail=job.error or "Verarbeitungsfehler aufgetreten."
+            )
+        return job.result or job.to_dict()
 
-    has_row3 = any(ev.get("target_row") == 3 for ev in events)
-    rows_used = ["2. Reihe (C-Dur, B/b)"]
-    if has_row3:
-        rows_used.append("3. Reihe (F-Dur Trio, C/c)")
+    return job.to_dict()
 
-    xml_str, measure_directions = build_dual_system_musicxml(
-        events,
-        griff_states,
-        title=piece_title,
-        emit_musicxml_brackets=False,
+
+@app.get("/api/jobs/{job_id}")
+def get_job_status(job_id: str) -> dict:
+    """
+    Returns the real-time status of a transcription job, including all 8 stages,
+    durations, active stage description, and telemetry logs.
+    """
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
+    return job.to_dict()
+
+
+@app.get("/api/jobs/{job_id}/stream")
+async def stream_job_status(job_id: str):
+    """
+    Server-Sent Events (SSE) streaming endpoint pushing real-time progress updates,
+    stage changes, and log messages directly to the client.
+    """
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Auftrag nicht gefunden.")
+
+    async def event_generator():
+        last_str = None
+        # Send initial snapshot immediately
+        snapshot = job.to_dict()
+        last_str = json.dumps(snapshot)
+        yield f"data: {last_str}\n\n"
+
+        if job.status in ("completed", "failed"):
+            return
+
+        while True:
+            await asyncio.sleep(0.35)
+            current_job = job_manager.get_job(job_id)
+            if not current_job:
+                break
+            payload = current_job.to_dict()
+            cur_str = json.dumps(payload)
+            if cur_str != last_str:
+                yield f"data: {cur_str}\n\n"
+                last_str = cur_str
+            if current_job.status in ("completed", "failed"):
+                # Send final state
+                yield f"data: {cur_str}\n\n"
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
-    xml_path = job_dir / "score_kombi.musicxml"
-    xml_path.write_text(xml_str, encoding="utf-8")
-
-    pdf_path = job_dir / "score_griffschrift_a4.pdf"
-    png_pages = render_musicxml_to_a4_pdf(
-        xml_str=xml_str,
-        measure_directions=measure_directions,
-        output_pdf_path=pdf_path,
-        output_dir=job_dir,
-        prefix="page",
-        dpi=300,
-    )
-
-    solo_wav = job_dir / "synthesized_score_only.wav"
-    stereo_wav = job_dir / "stereo_overlay_check.wav"
-    create_audio_verification_files(
-        orig_wav_path=ingested.wav_path,
-        events=events,
-        griff_states=griff_states,
-        downbeats_s=reg_dbs,
-        solo_wav_path=solo_wav,
-        stereo_wav_path=stereo_wav,
-    )
-
-    elapsed_total = round(time.perf_counter() - t_start_total, 2)
-    base_url = f"/files/outputs/jobs/{content_hash}"
-
-    pages_payload = [
-        {
-            "page_number": idx + 1,
-            "png_url": f"{base_url}/page_page{idx + 1}.png",
-            "svg_url": f"{base_url}/page_page{idx + 1}.svg",
-            "caption": f"Seite {idx + 1} / {len(png_pages)} — DIN A4 (300 DPI)",
-        }
-        for idx in range(len(png_pages))
-    ]
-
-    return {
-        "job_id": content_hash,
-        "title": piece_title,
-        "original_filename": filename,
-        "media_kind": ingested.media_kind,
-        "conversion_step": ingested.conversion_step,
-        "duration_s": ingested.duration_s,
-        "tuning": "G-C-F-B",
-        "time_signature": "2/4 Polka",
-        "measures_count": max_m,
-        "druck_measures": druck_bars,
-        "zug_measures": zug_bars,
-        "rows_used": rows_used,
-        "processing_time_s": elapsed_total,
-        "video_frame_url": f"{base_url}/video_frame.jpg" if ingested.preview_frame_path else None,
-        "original_audio_url": f"{base_url}/extracted_audio.wav",
-        "synthesized_audio_url": f"{base_url}/synthesized_score_only.wav",
-        "stereo_diff_audio_url": f"{base_url}/stereo_overlay_check.wav",
-        "pdf_url": f"{base_url}/score_griffschrift_a4.pdf",
-        "musicxml_url": f"{base_url}/score_kombi.musicxml",
-        "pages": pages_payload,
-    }
 
 
 @app.get("/files/outputs/{file_path:path}")
