@@ -196,7 +196,10 @@ def render_musicxml_to_a4_pdf(
     Returns list of generated PNG page paths.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    tk = verovio.toolkit()
+    resource_dir = str(Path(verovio.__file__).resolve().parent / "data")
+    verovio.setDefaultResourcePath(resource_dir)
+    tk = verovio.toolkit(False)
+    tk.setResourcePath(resource_dir)
     tk.setOptions(
         {
             "pageWidth": 2100,
