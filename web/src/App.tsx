@@ -267,9 +267,9 @@ export default function App() {
       </header>
 
       <main className="workbench">
-        {/* Left Column: Upload, Technical Spec Ledger & Audio Verification */}
+        {/* Left Column: Upload, and conditionally specs & verification when loaded */}
         <aside className="sidebar-column">
-          {/* [01] Datei-Upload (Audio & Video) */}
+          {/* [01] Datei-Upload (Audio & Video) - Always necessary */}
           <section className="panel-section">
             <div className="section-header">
               <div>
@@ -350,279 +350,246 @@ export default function App() {
             </form>
           </section>
 
-          {/* [02] Technische Werkdaten & Video-Konvertierungs-Status */}
-          <section className="panel-section">
-            <div className="section-header">
-              <div>
-                <span className="section-index">[02] Werkblatt-Protokoll</span>
-                <h2 className="section-heading">Konvertierung &amp; Analyse</h2>
+          {/* [02] Werkblatt-Protokoll: Only visible when activeJob or result exists */}
+          {(result || (activeJob && activeJob.status === 'running')) && (
+            <section className="panel-section">
+              <div className="section-header">
+                <div>
+                  <span className="section-index">[02] Werkblatt-Protokoll</span>
+                  <h2 className="section-heading">Konvertierung &amp; Analyse</h2>
+                </div>
               </div>
-            </div>
 
-            {result ? (
-              <>
-                {result.video_frame_url && (
-                  <div className="video-preview-frame">
-                    <img
-                      src={result.video_frame_url}
-                      alt="Extrahierter Video-Frame der Harmonika-Aufnahme"
-                    />
-                    <div className="video-frame-caption">
-                      <span>QUELLE: {result.original_filename}</span>
-                      <span>VIDEO → AUDIO</span>
+              {result ? (
+                <>
+                  {result.video_frame_url && (
+                    <div className="video-preview-frame">
+                      <img
+                        src={result.video_frame_url}
+                        alt="Extrahierter Video-Frame der Harmonika-Aufnahme"
+                      />
+                      <div className="video-frame-caption">
+                        <span>QUELLE: {result.original_filename}</span>
+                        <span>VIDEO → AUDIO</span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <table className="spec-table">
-                  <tbody>
-                    <tr>
-                      <th>Eingang</th>
-                      <td>
-                        {result.media_kind}: {result.original_filename}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Medien-Pipeline</th>
-                      <td>{result.conversion_step}</td>
-                    </tr>
-                    <tr>
-                      <th>Laufzeit / Takt</th>
-                      <td>
-                        {result.duration_s.toFixed(1)} s · {result.time_signature} ({result.measures_count}{' '}
-                        Takte)
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Balgrichtung</th>
-                      <td>
-                        {result.druck_measures} Takte DRUCK · {result.zug_measures} Takte ZUG
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Aktive Reihen</th>
-                      <td>{result.rows_used.join(' / ')}</td>
-                    </tr>
-                    <tr>
-                      <th>Rechenzeit</th>
-                      <td>{result.processing_time_s.toFixed(1)}s (8 Stufen abgeschlossen)</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </>
-            ) : activeJob ? (
-              <div className="active-job-mini-status">
-                <table className="spec-table">
-                  <tbody>
-                    <tr>
-                      <th>Eingang</th>
-                      <td>{activeJob.filename}</td>
-                    </tr>
-                    <tr>
-                      <th>Status</th>
-                      <td>
-                        <span className={`status-pill pill-${activeJob.status}`}>
-                          {activeJob.status === 'running'
-                            ? `● In Arbeit (${activeJob.progress_percent}%)`
-                            : activeJob.status.toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Aktive Stufe</th>
-                      <td>[{activeJob.current_stage_id}] {activeJob.current_stage_label}</td>
-                    </tr>
-                    <tr>
-                      <th>Laufzeit</th>
-                      <td>{formatSeconds(activeJob.elapsed_s)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="empty-panel-placeholder">
-                <table className="spec-table muted">
-                  <tbody>
-                    <tr>
-                      <th>Eingang</th>
-                      <td>Keine Datei gewählt</td>
-                    </tr>
-                    <tr>
-                      <th>Medien-Pipeline</th>
-                      <td>Wartet auf Audio-/Video-Upload…</td>
-                    </tr>
-                    <tr>
-                      <th>Laufzeit / Takt</th>
-                      <td>—</td>
-                    </tr>
-                    <tr>
-                      <th>Balgrichtung</th>
-                      <td>—</td>
-                    </tr>
-                    <tr>
-                      <th>Aktive Reihen</th>
-                      <td>—</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          {/* [03] Akustische Gegenprobe (Audio-Diff) */}
-          <section className="panel-section">
-            <div className="section-header">
-              <div>
-                <span className="section-index">[03] Hörprobe</span>
-                <h2 className="section-heading">Akustischer Noten-Abgleich</h2>
-              </div>
-            </div>
-
-            {result ? (
-              <>
-                <div className="audio-tabs" role="tablist">
-                  <button
-                    type="button"
-                    className={`audio-tab ${audioMode === 'stereo' ? 'active' : ''}`}
-                    onClick={() => setAudioMode('stereo')}
-                  >
-                    Stereo-Diff (L/R)
-                  </button>
-                  <button
-                    type="button"
-                    className={`audio-tab ${audioMode === 'synth' ? 'active' : ''}`}
-                    onClick={() => setAudioMode('synth')}
-                  >
-                    Nur Notenblatt
-                  </button>
-                  <button
-                    type="button"
-                    className={`audio-tab ${audioMode === 'original' ? 'active' : ''}`}
-                    onClick={() => setAudioMode('original')}
-                  >
-                    Original-Ton
-                  </button>
+                  <table className="spec-table">
+                    <tbody>
+                      <tr>
+                        <th>Eingang</th>
+                        <td>
+                          {result.media_kind}: {result.original_filename}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Medien-Pipeline</th>
+                        <td>{result.conversion_step}</td>
+                      </tr>
+                      <tr>
+                        <th>Laufzeit / Takt</th>
+                        <td>
+                          {result.duration_s.toFixed(1)} s · {result.time_signature} ({result.measures_count}{' '}
+                          Takte)
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Balgrichtung</th>
+                        <td>
+                          {result.druck_measures} Takte DRUCK · {result.zug_measures} Takte ZUG
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Aktive Reihen</th>
+                        <td>{result.rows_used.join(' / ')}</td>
+                      </tr>
+                      <tr>
+                        <th>Rechenzeit</th>
+                        <td>{result.processing_time_s.toFixed(1)}s (8 Stufen abgeschlossen)</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              ) : activeJob ? (
+                <div className="active-job-mini-status">
+                  <table className="spec-table">
+                    <tbody>
+                      <tr>
+                        <th>Eingang</th>
+                        <td>{activeJob.filename}</td>
+                      </tr>
+                      <tr>
+                        <th>Status</th>
+                        <td>
+                          <span className={`status-pill pill-${activeJob.status}`}>
+                            {activeJob.status === 'running'
+                              ? `● In Arbeit (${activeJob.progress_percent}%)`
+                              : activeJob.status.toUpperCase()}
+                          </span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Aktive Stufe</th>
+                        <td>[{activeJob.current_stage_id}] {activeJob.current_stage_label}</td>
+                      </tr>
+                      <tr>
+                        <th>Laufzeit</th>
+                        <td>{formatSeconds(activeJob.elapsed_s)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
+              ) : null}
+            </section>
+          )}
 
-                <audio
-                  key={activeAudioUrl}
-                  className="audio-player-element"
-                  controls
-                  preload="metadata"
-                  src={activeAudioUrl}
-                />
-                <p className="audio-hint">
-                  {audioMode === 'stereo' &&
-                    'Links: Original-Ton aus Video/Audio · Rechts: Synthese exakt nach generiertem Notenblatt.'}
-                  {audioMode === 'synth' &&
-                    'Spielt ausschließlich die erkannten Diskant-Noten + Helikon-Bässe des Notenblatts.'}
-                  {audioMode === 'original' &&
-                    'Die per FFmpeg aus der Quell-Datei extrahierte 22.05 kHz Mono-Audiospur.'}
-                </p>
-              </>
-            ) : (
-              <div className="empty-panel-placeholder">
-                <div className="empty-audio-box">
-                  <span className="empty-audio-kicker">3-Kanal Audio-Verifikation</span>
-                  <p className="empty-audio-text">
-                    Nach der Transkription stehen hier <strong>Stereo-Diff (L/R)</strong>, der{' '}
-                    <strong>synthetisierte Harmonika-Notensatz</strong> und das{' '}
-                    <strong>Original-Audio</strong> zum direkten Gehörabgleich bereit.
-                  </p>
+          {/* [03] Hörprobe: Only visible when result exists */}
+          {result && (
+            <section className="panel-section">
+              <div className="section-header">
+                <div>
+                  <span className="section-index">[03] Hörprobe</span>
+                  <h2 className="section-heading">Akustischer Noten-Abgleich</h2>
                 </div>
               </div>
-            )}
-          </section>
 
-          {/* [04] Kurz-Legende für Nicht-Musiker */}
-          <section className="panel-section">
-            <div className="section-header">
-              <div>
-                <span className="section-index">[04] Lesehilfe</span>
-                <h2 className="section-heading">Griffschrift-Codierung</h2>
+              <div className="audio-tabs" role="tablist">
+                <button
+                  type="button"
+                  className={`audio-tab ${audioMode === 'stereo' ? 'active' : ''}`}
+                  onClick={() => setAudioMode('stereo')}
+                >
+                  Stereo-Diff (L/R)
+                </button>
+                <button
+                  type="button"
+                  className={`audio-tab ${audioMode === 'synth' ? 'active' : ''}`}
+                  onClick={() => setAudioMode('synth')}
+                >
+                  Nur Notenblatt
+                </button>
+                <button
+                  type="button"
+                  className={`audio-tab ${audioMode === 'original' ? 'active' : ''}`}
+                  onClick={() => setAudioMode('original')}
+                >
+                  Original-Ton
+                </button>
               </div>
-            </div>
-            <div className="legend-grid">
-              <div className="legend-item">
-                <span className="legend-symbol">● Runder Kopf</span>
-                <span className="legend-desc">1. Reihe (Raum) oder 2. Reihe (Linie)</span>
+
+              <audio
+                key={activeAudioUrl}
+                className="audio-player-element"
+                controls
+                preload="metadata"
+                src={activeAudioUrl}
+              />
+              <p className="audio-hint">
+                {audioMode === 'stereo' &&
+                  'Links: Original-Ton aus Video/Audio · Rechts: Synthese exakt nach generiertem Notenblatt.'}
+                {audioMode === 'synth' &&
+                  'Spielt ausschließlich die erkannten Diskant-Noten + Helikon-Bässe des Notenblatts.'}
+                {audioMode === 'original' &&
+                  'Die per FFmpeg aus der Quell-Datei extrahierte 22.05 kHz Mono-Audiospur.'}
+              </p>
+            </section>
+          )}
+
+          {/* [04] Griffschrift-Kurzlegende: Only visible when result exists */}
+          {result && (
+            <section className="panel-section">
+              <div className="section-header">
+                <div>
+                  <span className="section-index">[04] Lesehilfe</span>
+                  <h2 className="section-heading">Griffschrift-Codierung</h2>
+                </div>
               </div>
-              <div className="legend-item">
-                <span className="legend-symbol">× Kreuz-Kopf</span>
-                <span className="legend-desc">3. Reihe (Raum) oder 4. Reihe (Linie)</span>
+              <div className="legend-grid">
+                <div className="legend-item">
+                  <span className="legend-symbol">● Runder Kopf</span>
+                  <span className="legend-desc">1. Reihe (Raum) oder 2. Reihe (Linie)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-symbol">× Kreuz-Kopf</span>
+                  <span className="legend-desc">3. Reihe (Raum) oder 4. Reihe (Linie)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-symbol">▬ Druckbalken</span>
+                  <span className="legend-desc">Balg zusammendrücken (ohne Balken = Zug)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-symbol">B b / C c</span>
+                  <span className="legend-desc">Grund- &amp; Akkordbass (2. bzw. 3. Reihe)</span>
+                </div>
               </div>
-              <div className="legend-item">
-                <span className="legend-symbol">▬ Druckbalken</span>
-                <span className="legend-desc">Balg zusammendrücken (ohne Balken = Zug)</span>
-              </div>
-              <div className="legend-item">
-                <span className="legend-symbol">B b / C c</span>
-                <span className="legend-desc">Grund- &amp; Akkordbass (2. bzw. 3. Reihe)</span>
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
         </aside>
 
         {/* Right Stage: Sheet Music Viewer + Embedded PDF Viewer + Download */}
         <section className="stage-column">
-          <div className="stage-toolbar">
-            <div className="view-mode-group" role="tablist" aria-label="Ansichtsmodus">
-              <button
-                type="button"
-                className={`mode-btn ${viewMode === 'sheet' ? 'active' : ''}`}
-                onClick={() => setViewMode('sheet')}
-                disabled={!result}
-                title={!result ? 'Erst nach Transkription verfügbar' : undefined}
-              >
-                Noten &amp; Griffschrift {result ? `(${result.pages.length} Seiten)` : '(0 Seiten)'}
-              </button>
-              <button
-                type="button"
-                className={`mode-btn ${viewMode === 'pdf' ? 'active' : ''}`}
-                onClick={() => setViewMode('pdf')}
-                disabled={!result}
-                title={!result ? 'Erst nach Upload und Notenübersetzung verfügbar' : undefined}
-              >
-                Original PDF-Ansicht
-              </button>
-              {(activeJob || isLoading) && (
-                <button
-                  type="button"
-                  className={`mode-btn ${viewMode === 'progress' ? 'active' : ''}`}
-                  onClick={() => setViewMode('progress')}
-                >
-                  Pipeline-Protokoll {isLoading ? `(${activeJob?.progress_percent || 0}%)` : '✓'}
-                </button>
+          {/* Stage Toolbar: Only rendered when there are views or active progress to display */}
+          {(result || activeJob) && (
+            <div className="stage-toolbar">
+              <div className="view-mode-group" role="tablist" aria-label="Ansichtsmodus">
+                {result && (
+                  <>
+                    <button
+                      type="button"
+                      className={`mode-btn ${viewMode === 'sheet' ? 'active' : ''}`}
+                      onClick={() => setViewMode('sheet')}
+                    >
+                      Noten &amp; Griffschrift ({result.pages.length} Seiten)
+                    </button>
+                    <button
+                      type="button"
+                      className={`mode-btn ${viewMode === 'pdf' ? 'active' : ''}`}
+                      onClick={() => setViewMode('pdf')}
+                    >
+                      Original PDF-Ansicht
+                    </button>
+                  </>
+                )}
+                {activeJob && (
+                  <button
+                    type="button"
+                    className={`mode-btn ${viewMode === 'progress' ? 'active' : ''}`}
+                    onClick={() => setViewMode('progress')}
+                  >
+                    Pipeline-Protokoll {isLoading ? `(${activeJob.progress_percent}%)` : '✓'}
+                  </button>
+                )}
+              </div>
+
+              {result && (
+                <div className="toolbar-actions">
+                  <button
+                    type="button"
+                    className={`mode-btn ${zoomed ? 'active' : ''}`}
+                    onClick={() => setZoomed(!zoomed)}
+                  >
+                    {zoomed ? '100% Druckansicht' : 'Vergrößern (+)'}
+                  </button>
+                  <a
+                    className="btn btn-secondary"
+                    href={result.musicxml_url}
+                    download={`${result.job_id}_Normalnoten_Griffschrift.musicxml`}
+                    style={{ backgroundColor: 'var(--bg-sheet)', color: 'var(--ink)' }}
+                  >
+                    MusicXML (.xml)
+                  </a>
+                  <a
+                    className="btn btn-copper"
+                    href={`${result.pdf_url}?download=true`}
+                    download={`${result.job_id}_Normalnoten_Griffschrift_A4.pdf`}
+                  >
+                    DIN-A4 PDF Herunterladen
+                  </a>
+                </div>
               )}
             </div>
-
-            {result && (
-              <div className="toolbar-actions">
-                <button
-                  type="button"
-                  className={`mode-btn ${zoomed ? 'active' : ''}`}
-                  onClick={() => setZoomed(!zoomed)}
-                >
-                  {zoomed ? '100% Druckansicht' : 'Vergrößern (+)'}
-                </button>
-                <a
-                  className="btn btn-secondary"
-                  href={result.musicxml_url}
-                  download={`${result.job_id}_Normalnoten_Griffschrift.musicxml`}
-                  style={{ backgroundColor: 'var(--bg-sheet)', color: 'var(--ink)' }}
-                >
-                  MusicXML (.xml)
-                </a>
-                <a
-                  className="btn btn-copper"
-                  href={`${result.pdf_url}?download=true`}
-                  download={`${result.job_id}_Normalnoten_Griffschrift_A4.pdf`}
-                >
-                  DIN-A4 PDF Herunterladen
-                </a>
-              </div>
-            )}
-          </div>
+          )}
 
           <div className="stage-viewport">
             {errorMsg && (
@@ -781,61 +748,63 @@ export default function App() {
               </div>
             )}
 
-            {/* EMPTY STATE CANVAS */}
+            {/* MINIMALIST, FOCUSED EMPTY STATE CANVAS (ONLY NECESSARY UI) */}
             {!result && !isLoading && !errorMsg && viewMode !== 'progress' && (
               <div className="empty-stage-canvas">
-                <div className="empty-blueprint-sheet">
+                <div
+                  className={`empty-blueprint-sheet drop-active-target ${dragActive ? 'drag-active' : ''}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragActive(true);
+                  }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragActive(false);
+                    handleFilePicked(e.dataTransfer.files?.[0]);
+                  }}
+                >
                   <div className="blueprint-corner top-left">+</div>
                   <div className="blueprint-corner top-right">+</div>
                   <div className="blueprint-corner bottom-left">+</div>
                   <div className="blueprint-corner bottom-right">+</div>
 
                   <div className="blueprint-header">
-                    <span className="blueprint-tag">DIN A4 DRUCKBOGEN · 210 × 297 MM · 300 DPI</span>
-                    <span className="blueprint-id">NOTENPULT-WERKBANK</span>
+                    <span className="blueprint-tag">DIN A4 DRUCKBOGEN · STIMMUNG G-C-F-B</span>
+                    <span className="blueprint-id">SYSTEM MAX ROSENZOPF</span>
                   </div>
 
-                  <div className="blueprint-body">
-                    <h3 className="blueprint-title">Noch kein Notenstich geladen</h3>
+                  <div className="blueprint-body empty-focused-body">
+                    <h3 className="blueprint-title">Audio- oder Videodatei ablegen</h3>
                     <p className="blueprint-lead">
-                      Wähle in der linken Seitenleiste eine Audio- oder Videodatei aus, um die
-                      automatische Übersetzung in Normalnoten und spielbare Griffschrift (System Max
-                      Rosenzopf) zu starten.
+                      Ziehe eine Harmonika-Aufnahme hierher oder wähle links eine Datei aus, um
+                      die automatische Übersetzung in Normalnoten und Griffschrift zu starten.
                     </p>
 
-                    <div className="blueprint-workflow-grid">
-                      <div className="blueprint-step">
-                        <span className="step-num">01</span>
-                        <strong>Medien-Ingest</strong>
-                        <p>FFmpeg extrahiert bei Videos automatisch eine 22.05 kHz Mono-WAV-Spur.</p>
-                      </div>
-                      <div className="blueprint-step">
-                        <span className="step-num">02</span>
-                        <strong>KI-Transkription</strong>
-                        <p>Beat-This, MuScriptor, CRNN &amp; Basic Pitch ermitteln Takte &amp; Noten.</p>
-                      </div>
-                      <div className="blueprint-step">
-                        <span className="step-num">03</span>
-                        <strong>Rosenzopf-Viterbi</strong>
-                        <p>DAG berechnet globale Druck/Zug-Balgrichtung (Handspanne ≤ 5 Knöpfe).</p>
-                      </div>
-                      <div className="blueprint-step">
-                        <span className="step-num">04</span>
-                        <strong>Druckfertiges PDF</strong>
-                        <p>Verovio graviert Noten + Griffschrift mit durchgehendem Druckbalken.</p>
-                      </div>
+                    <div className="empty-format-pills">
+                      <span className="format-pill">MP4</span>
+                      <span className="format-pill">MOV</span>
+                      <span className="format-pill">WEBM</span>
+                      <span className="format-pill">WAV</span>
+                      <span className="format-pill">MP3</span>
+                      <span className="format-pill">M4A</span>
+                      <span className="format-pill">FLAC</span>
                     </div>
 
                     <div className="blueprint-cta-row">
                       <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fileInputRef.current?.click();
+                        }}
                       >
                         Datei auswählen
                       </button>
                       <span className="blueprint-cta-hint">
-                        Unterstützt MP4, MOV, WEBM, WAV, MP3, M4A, FLAC
+                        FFmpeg extrahiert bei Videos automatisch 22.05 kHz Mono-Audio
                       </span>
                     </div>
                   </div>

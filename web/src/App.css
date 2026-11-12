@@ -692,45 +692,42 @@ body {
   margin: 0 0 1.75rem 0;
 }
 
-.blueprint-workflow-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.75rem;
-  border-top: var(--rule-subtle);
-  border-bottom: var(--rule-subtle);
-  padding: 1.25rem 0;
-  margin-bottom: 1.75rem;
+.empty-blueprint-sheet.drop-active-target {
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.blueprint-step {
-  background-color: var(--bg-panel);
-  border: var(--rule-subtle);
-  padding: 0.75rem;
+.empty-blueprint-sheet.drop-active-target:hover {
+  border-color: var(--ink);
+  box-shadow: 6px 6px 0px var(--ink);
 }
 
-.blueprint-step .step-num {
+.empty-blueprint-sheet.drop-active-target.drag-active {
+  border-color: var(--accent-pine);
+  background-color: #EAE6DB;
+  box-shadow: 6px 6px 0px var(--accent-pine);
+}
+
+.empty-focused-body {
+  padding: 0.5rem 0;
+}
+
+.empty-format-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.25rem 0 1.75rem 0;
+}
+
+.format-pill {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--accent-copper);
-  display: block;
-  margin-bottom: 0.25rem;
-}
-
-.blueprint-step strong {
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  display: block;
-  margin-bottom: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  border: var(--rule-subtle);
+  background-color: var(--bg-panel);
   color: var(--ink);
-}
-
-.blueprint-step p {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  color: var(--ink-secondary);
-  line-height: 1.35;
-  margin: 0;
+  letter-spacing: 0.04em;
 }
 
 .blueprint-cta-row {
