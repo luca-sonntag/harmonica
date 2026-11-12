@@ -67,8 +67,19 @@ def ingest_media_file(
     ]
     proc = subprocess.run(cmd_audio, capture_output=True, text=True)
     if proc.returncode != 0 or not wav_out.exists():
+        err_lower = (proc.stderr or "").lower()
+        if (
+            "does not contain any stream" in err_lower
+            or "matches no streams" in err_lower
+            or "no audio" in err_lower
+        ):
+            raise ValueError(
+                f"In der Datei '{original_filename}' wurde keine Tonspur gefunden. "
+                "Bitte wähle eine Video- oder Audiodatei mit aufgenommener Musik."
+            )
         raise RuntimeError(
-            f"FFmpeg audio extraction failed for {original_filename}: {proc.stderr[-400:]}"
+            f"Die Tonspur aus '{original_filename}' konnte nicht eingelesen werden. "
+            "Bitte stelle sicher, dass die Datei eine intakte Musikaufnahme enthält."
         )
 
     duration_s = float(librosa.get_duration(path=str(wav_out)))
@@ -98,9 +109,9 @@ def ingest_media_file(
     media_kind = "VIDEO" if is_video else "AUDIO"
     ext_label = ext.upper().lstrip(".") or "MEDIA"
     conversion_step = (
-        f"{ext_label}-Video → 22.05 kHz Mono WAV (FFmpeg)"
+        f"{ext_label}-Videoaufnahme → Tonspur aufbereitet"
         if is_video
-        else f"{ext_label}-Audio → 22.05 kHz Mono WAV (FFmpeg)"
+        else f"{ext_label}-Audiodatei → Tonspur aufbereitet"
     )
 
     return IngestedMedia(

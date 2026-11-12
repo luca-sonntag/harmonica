@@ -706,6 +706,23 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Action Row when Failed / Notice */}
+                {activeJob.status === 'failed' && (
+                  <div className="progress-success-action-row">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setActiveJob(null);
+                        setViewMode('sheet');
+                        setSelectedFile(null);
+                      }}
+                    >
+                      ← Andere Aufnahme auswählen
+                    </button>
+                  </div>
+                )}
+
                 {/* Monospace Log View */}
                 <div className="telemetry-terminal-box">
                   <div className="telemetry-terminal-bar">
@@ -729,7 +746,7 @@ export default function App() {
             )}
 
             {/* MINIMALIST, FOCUSED EMPTY STATE CANVAS (ONLY NECESSARY UI) */}
-            {!result && !isLoading && !errorMsg && viewMode !== 'progress' && (
+            {!result && !isLoading && viewMode !== 'progress' && (
               <div className="empty-stage-canvas">
                 <div
                   className={`empty-blueprint-sheet drop-active-target ${dragActive ? 'drag-active' : ''}`}
