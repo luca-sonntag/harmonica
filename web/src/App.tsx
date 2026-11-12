@@ -30,16 +30,54 @@ interface TranscriptionResult {
   pages: SheetPage[];
 }
 
-type ViewMode = 'sheet' | 'pdf';
+interface PipelineStage {
+  id: string;
+  step: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  duration_s: number | null;
+  detail: string;
+}
+
+interface TelemetryLog {
+  time: string;
+  level: string;
+  text: string;
+}
+
+interface JobStatusResponse {
+  job_id: string;
+  filename: string;
+  title: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  progress_percent: number;
+  current_stage_id: string;
+  current_stage_label: string;
+  current_stage_detail: string;
+  elapsed_s: number;
+  stages: PipelineStage[];
+  logs: TelemetryLog[];
+  error: string | null;
+  result: TranscriptionResult | null;
+}
+
+type ViewMode = 'sheet' | 'pdf' | 'progress';
 type PageDisplayFilter = 'all' | number;
 type AudioTrackMode = 'stereo' | 'synth' | 'original';
+
+function formatSeconds(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}s`;
+}
 
 export default function App() {
   const [result, setResult] = useState<TranscriptionResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [customTitle, setCustomTitle] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [loadingStage, setLoadingStage] = useState<string>('');
+  const [activeJob, setActiveJob] = useState<JobStatusResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
 
@@ -50,6 +88,9 @@ export default function App() {
   const [gpuLabel, setGpuLabel] = useState<string>('CUDA / Verovio Ready');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const logsEndRef = useRef<HTMLDivElement | null>(null);
+  const sseRef = useRef<EventSource | null>(null);
+  const pollIntervalRef = useRef<any>(null);
 
   useEffect(() => {
     fetch('/api/health')
@@ -60,7 +101,28 @@ export default function App() {
         }
       })
       .catch(() => {});
+
+    return () => {
+      cleanupStreams();
+    };
   }, []);
+
+  useEffect(() => {
+    if (logsEndRef.current && viewMode === 'progress') {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeJob?.logs, viewMode]);
+
+  function cleanupStreams() {
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }
 
   function handleFilePicked(file: File | undefined) {
     if (!file) return;
@@ -72,18 +134,68 @@ export default function App() {
     }
   }
 
+  function startJobTracking(jobId: string) {
+    cleanupStreams();
+
+    function handleJobUpdate(job: JobStatusResponse) {
+      setActiveJob(job);
+      if (job.status === 'completed' && job.result) {
+        setResult(job.result);
+        setIsLoading(false);
+        cleanupStreams();
+      } else if (job.status === 'failed') {
+        setErrorMsg(job.error || 'Verarbeitung fehlgeschlagen.');
+        setIsLoading(false);
+        cleanupStreams();
+      }
+    }
+
+    function startPollingFallback() {
+      if (pollIntervalRef.current) return;
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const resp = await fetch(`/api/jobs/${jobId}`);
+          if (!resp.ok) return;
+          const data: JobStatusResponse = await resp.json();
+          handleJobUpdate(data);
+        } catch {
+          // ignore transient polling errors
+        }
+      }, 600);
+    }
+
+    try {
+      const es = new EventSource(`/api/jobs/${jobId}/stream`);
+      sseRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const data: JobStatusResponse = JSON.parse(event.data);
+          handleJobUpdate(data);
+        } catch (err) {
+          console.warn('Failed to parse SSE event', err);
+        }
+      };
+
+      es.onerror = () => {
+        if (sseRef.current) {
+          sseRef.current.close();
+          sseRef.current = null;
+        }
+        startPollingFallback();
+      };
+    } catch {
+      startPollingFallback();
+    }
+  }
+
   async function handleRunPipeline(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedFile) return;
 
     setErrorMsg(null);
     setIsLoading(true);
-    const isVideo = /\.(mp4|mov|webm|mkv|avi|m4v|3gp)$/i.test(selectedFile.name);
-    setLoadingStage(
-      isVideo
-        ? '1/3 FFmpeg extrahiert 22.05 kHz Mono-Audio aus Video → 2/3 KI-Transkription & Viterbi → 3/3 DIN-A4 PDF-Stich…'
-        : '1/2 KI-Transkription & Viterbi-Optimierung (Druck/Zug) → 2/2 DIN-A4 PDF-Stich…',
-    );
+    setViewMode('progress');
 
     try {
       const formData = new FormData();
@@ -100,14 +212,20 @@ export default function App() {
         throw new Error(errJson.detail || `Serverfehler (${resp.status})`);
       }
 
-      const data: TranscriptionResult = await resp.json();
-      setResult(data);
-      setPageFilter('all');
+      const initialData: JobStatusResponse = await resp.json();
+      setActiveJob(initialData);
+
+      if (initialData.status === 'completed' && initialData.result) {
+        setResult(initialData.result);
+        setIsLoading(false);
+        setPageFilter('all');
+        return;
+      }
+
+      startJobTracking(initialData.job_id);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Fehler bei der Verarbeitung.');
-    } finally {
       setIsLoading(false);
-      setLoadingStage('');
+      setErrorMsg(err instanceof Error ? err.message : 'Fehler bei der Verarbeitung.');
     }
   }
 
@@ -143,7 +261,7 @@ export default function App() {
         <div className="masthead-title-row">
           <h1 className="masthead-title">Normalnoten &amp; Griffschrift</h1>
           <p className="masthead-subtitle">
-            Video-/Audio-Ingest → KI-Transkription → Viterbi-Zug/Druck-Optimierer → DIN-A4 Druckbogen
+            Video-/Audio-Ingest → Beat-Tracking → KI-Transkription → Viterbi-Balg-Optimierer → DIN-A4 Druckbogen
           </p>
         </div>
       </header>
@@ -183,7 +301,7 @@ export default function App() {
                 </div>
                 <p className="dropzone-hint">
                   Bei Videodateien extrahiert die Pipeline automatisch die Audiospur (22.05 kHz Mono WAV)
-                  vor der Notenübersetzung.
+                  und einen Referenz-Keyframe vor der Notenübersetzung.
                 </p>
                 <input
                   ref={fileInputRef}
@@ -214,6 +332,7 @@ export default function App() {
                   placeholder="z.B. Steirische Polka in C"
                   value={customTitle}
                   onChange={(e) => setCustomTitle(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
 
@@ -224,7 +343,7 @@ export default function App() {
                   disabled={!selectedFile || isLoading}
                 >
                   {isLoading
-                    ? 'Pipeline rechnet…'
+                    ? `Pipeline rechnet (${activeJob?.progress_percent ?? 0}%)…`
                     : 'In Noten + Griffschrift übersetzen'}
                 </button>
               </div>
@@ -284,9 +403,42 @@ export default function App() {
                       <th>Aktive Reihen</th>
                       <td>{result.rows_used.join(' / ')}</td>
                     </tr>
+                    <tr>
+                      <th>Rechenzeit</th>
+                      <td>{result.processing_time_s.toFixed(1)}s (8 Stufen abgeschlossen)</td>
+                    </tr>
                   </tbody>
                 </table>
               </>
+            ) : activeJob ? (
+              <div className="active-job-mini-status">
+                <table className="spec-table">
+                  <tbody>
+                    <tr>
+                      <th>Eingang</th>
+                      <td>{activeJob.filename}</td>
+                    </tr>
+                    <tr>
+                      <th>Status</th>
+                      <td>
+                        <span className={`status-pill pill-${activeJob.status}`}>
+                          {activeJob.status === 'running'
+                            ? `● In Arbeit (${activeJob.progress_percent}%)`
+                            : activeJob.status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Aktive Stufe</th>
+                      <td>[{activeJob.current_stage_id}] {activeJob.current_stage_label}</td>
+                    </tr>
+                    <tr>
+                      <th>Laufzeit</th>
+                      <td>{formatSeconds(activeJob.elapsed_s)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <div className="empty-panel-placeholder">
                 <table className="spec-table muted">
@@ -419,6 +571,8 @@ export default function App() {
                 type="button"
                 className={`mode-btn ${viewMode === 'sheet' ? 'active' : ''}`}
                 onClick={() => setViewMode('sheet')}
+                disabled={!result}
+                title={!result ? 'Erst nach Transkription verfügbar' : undefined}
               >
                 Noten &amp; Griffschrift {result ? `(${result.pages.length} Seiten)` : '(0 Seiten)'}
               </button>
@@ -431,23 +585,30 @@ export default function App() {
               >
                 Original PDF-Ansicht
               </button>
+              {(activeJob || isLoading) && (
+                <button
+                  type="button"
+                  className={`mode-btn ${viewMode === 'progress' ? 'active' : ''}`}
+                  onClick={() => setViewMode('progress')}
+                >
+                  Pipeline-Protokoll {isLoading ? `(${activeJob?.progress_percent || 0}%)` : '✓'}
+                </button>
+              )}
             </div>
 
             {result && (
               <div className="toolbar-actions">
-                {viewMode === 'sheet' && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setZoomed((z) => !z)}
-                  >
-                    {zoomed ? 'Zoom: Standard (A4)' : 'Zoom: Groß (135%)'}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`mode-btn ${zoomed ? 'active' : ''}`}
+                  onClick={() => setZoomed(!zoomed)}
+                >
+                  {zoomed ? '100% Druckansicht' : 'Vergrößern (+)'}
+                </button>
                 <a
-                  className="btn btn-Secondary"
+                  className="btn btn-secondary"
                   href={result.musicxml_url}
-                  download={`${result.job_id}_kombi.musicxml`}
+                  download={`${result.job_id}_Normalnoten_Griffschrift.musicxml`}
                   style={{ backgroundColor: 'var(--bg-sheet)', color: 'var(--ink)' }}
                 >
                   MusicXML (.xml)
@@ -464,19 +625,164 @@ export default function App() {
           </div>
 
           <div className="stage-viewport">
-            {isLoading && (
-              <div className="status-callout">
-                <strong>VERARBEITUNG LÄUFT:</strong> {loadingStage}
-              </div>
-            )}
-
             {errorMsg && (
               <div className="status-callout error">
                 <strong>FEHLER:</strong> {errorMsg}
               </div>
             )}
 
-            {!result && !isLoading && !errorMsg && (
+            {/* LIVE PIPELINE PROGRESS BOARD */}
+            {viewMode === 'progress' && activeJob && (
+              <div className="pipeline-progress-board">
+                {/* Header with Title, Status & Big Percentage */}
+                <div className="progress-board-header">
+                  <div>
+                    <span className="progress-kicker">
+                      [ECHTZEIT-PROTOKOLL · AUFTRAG #{activeJob.job_id}]
+                    </span>
+                    <h2 className="progress-board-title">{activeJob.filename}</h2>
+                    <p className="progress-board-subtitle">
+                      {activeJob.current_stage_label} — {activeJob.current_stage_detail}
+                    </p>
+                  </div>
+                  <div className="progress-metrics-box">
+                    <span className="progress-timer">
+                      {formatSeconds(activeJob.elapsed_s)}
+                    </span>
+                    <span className="progress-percent-huge">
+                      {activeJob.progress_percent}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tactile Mechanical Progress Bar */}
+                <div className="progress-gauge-container">
+                  <div className="progress-gauge-track">
+                    <div
+                      className="progress-gauge-fill"
+                      style={{ width: `${Math.max(activeJob.progress_percent, 2)}%` }}
+                    />
+                    <div className="progress-gauge-ticks">
+                      {[1, 2, 3, 4, 5, 6, 7].map((tick) => (
+                        <span
+                          key={tick}
+                          className="gauge-tick"
+                          style={{ left: `${(tick / 8) * 100}%` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="progress-gauge-meta">
+                    <span className="gauge-stage-tag">
+                      STUFE {activeJob.stages.findIndex((s) => s.id === activeJob.current_stage_id) + 1} VON 8
+                    </span>
+                    <span className="gauge-state-badge">
+                      {activeJob.status === 'completed'
+                        ? '✓ ALLE STUFEN ERFOLGREICH'
+                        : activeJob.status === 'failed'
+                          ? '✕ ABGEBROCHEN'
+                          : '● RECHENPROZESS LÄUFT'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Stage-by-Stage Ledger (8 Steps) */}
+                <div className="pipeline-stages-list">
+                  {activeJob.stages.map((stage) => {
+                    const isRunning = stage.status === 'running';
+                    const isDone = stage.status === 'completed';
+                    const isFail = stage.status === 'failed';
+
+                    return (
+                      <div
+                        key={stage.id}
+                        className={`pipeline-stage-card status-${stage.status}`}
+                      >
+                        <div className="stage-card-left">
+                          <span className="stage-card-step">[{stage.step}]</span>
+                          <div className="stage-card-info">
+                            <strong className="stage-card-title">{stage.title}</strong>
+                            <p className="stage-card-desc">{stage.description}</p>
+                            {stage.detail && (
+                              <p className="stage-card-detail">
+                                ↳ {stage.detail}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="stage-card-right">
+                          {isDone && (
+                            <span className="stage-badge badge-done">
+                              ✓ FERTIG {stage.duration_s ? `(${stage.duration_s.toFixed(1)}s)` : ''}
+                            </span>
+                          )}
+                          {isRunning && (
+                            <span className="stage-badge badge-running">
+                              <span className="running-pulse-dot" /> IN ARBEIT
+                            </span>
+                          )}
+                          {isFail && (
+                            <span className="stage-badge badge-failed">
+                              ✕ FEHLER
+                            </span>
+                          )}
+                          {stage.status === 'pending' && (
+                            <span className="stage-badge badge-pending">
+                              ○ WARTEND
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Action Row when Completed */}
+                {result && (
+                  <div className="progress-success-action-row">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setViewMode('sheet')}
+                    >
+                      Zum Notenstich wechseln ({result.pages.length} Seiten DIN A4) →
+                    </button>
+                    <a
+                      className="btn btn-copper"
+                      href={`${result.pdf_url}?download=true`}
+                      download={`${result.job_id}_Normalnoten_Griffschrift_A4.pdf`}
+                    >
+                      Druck-PDF herunterladen
+                    </a>
+                  </div>
+                )}
+
+                {/* Monospace Telemetry Terminal */}
+                <div className="telemetry-terminal-box">
+                  <div className="telemetry-terminal-bar">
+                    <span className="terminal-title">
+                      WERKSTATT-TELEMETRIE &amp; LOGS ({activeJob.logs.length} EINTRÄGE)
+                    </span>
+                    <span className="terminal-indicator">
+                      {activeJob.status === 'running' ? '● STREAM AKTIV' : 'IDLE'}
+                    </span>
+                  </div>
+                  <div className="telemetry-terminal-viewport">
+                    {activeJob.logs.map((log, idx) => (
+                      <div key={idx} className={`terminal-line level-${log.level}`}>
+                        <span className="terminal-time">[{log.time}]</span>
+                        <span className="terminal-msg">{log.text}</span>
+                      </div>
+                    ))}
+                    <div ref={logsEndRef} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* EMPTY STATE CANVAS */}
+            {!result && !isLoading && !errorMsg && viewMode !== 'progress' && (
               <div className="empty-stage-canvas">
                 <div className="empty-blueprint-sheet">
                   <div className="blueprint-corner top-left">+</div>
@@ -537,6 +843,7 @@ export default function App() {
               </div>
             )}
 
+            {/* SHEET MUSIC VIEW */}
             {result && viewMode === 'sheet' && (
               <>
                 <div className="page-switcher-bar">
@@ -578,7 +885,7 @@ export default function App() {
                         className="sheet-page-image"
                         src={page.png_url}
                         alt={page.caption}
-                        loading="eager"
+                        loading="lazy"
                       />
                     </article>
                   ))}
@@ -586,29 +893,28 @@ export default function App() {
               </>
             )}
 
+            {/* ORIGINAL PDF EMBED VIEW */}
             {result && viewMode === 'pdf' && (
-              <div className="pdf-iframe-container">
-                <div className="sheet-page-header">
-                  <span>DRUCKFERTIGES DOKUMENT: {result.title} (DIN A4)</span>
-                  <a
-                    href={result.pdf_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: 'var(--accent-pine)', fontWeight: 700 }}
-                  >
-                    In neuem Browser-Tab öffnen ↗
-                  </a>
-                </div>
+              <div className="pdf-embed-wrapper">
                 <iframe
                   className="pdf-iframe"
-                  src={result.pdf_url}
-                  title="DIN-A4 PDF Vorschau"
+                  src={`${result.pdf_url}#toolbar=1&navpanes=0&scrollbar=1`}
+                  title="DIN-A4 Druck-PDF"
                 />
               </div>
             )}
           </div>
         </section>
       </main>
+
+      <footer className="footer-spec">
+        <div className="footer-row">
+          <span>Stimmung: G-C-F-B (4-reihig, 46 Knöpfe)</span>
+          <span>Griffschrift-Standard: System Max Rosenzopf (1975)</span>
+          <span>Dual-System: Normalnoten (Violin) + Rosenzopf Griffschrift (&lt;fifths&gt;0&lt;/fifths&gt;)</span>
+          <span>Viterbi DAG · Balgwechsel-Kosten · Handspanne ≤ 5</span>
+        </div>
+      </footer>
     </div>
   );
 }
