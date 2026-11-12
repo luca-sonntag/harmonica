@@ -88,7 +88,6 @@ export default function App() {
   const [systemReadyLabel] = useState<string>('Notensatz bereit (Stimmung G-C-F-B)');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const logsEndRef = useRef<HTMLDivElement | null>(null);
   const sseRef = useRef<EventSource | null>(null);
   const pollIntervalRef = useRef<any>(null);
 
@@ -97,12 +96,6 @@ export default function App() {
       cleanupStreams();
     };
   }, []);
-
-  useEffect(() => {
-    if (logsEndRef.current && viewMode === 'progress') {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [activeJob?.logs, viewMode]);
 
   function cleanupStreams() {
     if (sseRef.current) {
@@ -730,7 +723,6 @@ export default function App() {
                         <span className="terminal-msg">{log.text}</span>
                       </div>
                     ))}
-                    <div ref={logsEndRef} />
                   </div>
                 </div>
               </div>
